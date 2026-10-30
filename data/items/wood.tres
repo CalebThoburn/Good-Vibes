@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemType" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/wood_item.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"wood"
+display_name = "Wood"
+description = "From cut-down trees: suck the falling pieces up with a vacuum. Burns in lanterns."
+color = Color(0.45, 0.3, 0.17, 1)

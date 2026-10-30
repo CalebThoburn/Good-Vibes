@@ -11,14 +11,12 @@ var view := MachineView.new()
 func _init() -> void:
 	collision_layer = BlockWorld.MACHINE_LAYER
 	collision_mask = BlockWorld.BLOCK_LAYER | BlockWorld.PLAYER_LAYER | BlockWorld.MACHINE_LAYER
-	var shape := RectangleShape2D.new()
-	shape.size = Vector2.ONE * MachineDesign.SIZE * MachineDesign.TIDBIT_PIXELS
-	var collision := CollisionShape2D.new()
-	collision.shape = shape
-	add_child(collision)
 	add_child(view)
 
 
+## Starts running a design. Only its tidbits are solid; empty cells let things through.
 func setup(design: MachineDesign, world: BlockWorld) -> void:
+	for shape in design.collision_shapes():
+		add_child(shape)
 	mass = maxf(design.tidbits.size(), 1) * MASS_PER_TIDBIT
 	view.run(design, world, self)

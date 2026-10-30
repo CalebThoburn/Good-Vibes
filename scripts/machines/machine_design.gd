@@ -73,6 +73,38 @@ func is_clear_to_edge(cell: Vector2i, direction: Vector2i) -> bool:
 	return first_tidbit_toward(cell, direction) == NO_CELL
 
 
+## The space the machine's tidbits fill, in machine space: one rectangle per run of
+## tidbits along a row. Empty cells are left out.
+func tidbit_rects() -> Array[Rect2]:
+	var rects: Array[Rect2] = []
+	for y in SIZE:
+		var x := 0
+		while x < SIZE:
+			if not tidbits.has(Vector2i(x, y)):
+				x += 1
+				continue
+			var run := 1
+			while x + run < SIZE and tidbits.has(Vector2i(x + run, y)):
+				run += 1
+			var corner := cell_position(Vector2i(x, y)) - Vector2.ONE * TIDBIT_PIXELS * 0.5
+			rects.append(Rect2(corner, Vector2(run, 1) * TIDBIT_PIXELS))
+			x += run
+	return rects
+
+
+## Collision shapes covering the tidbits, to add to a body or area.
+func collision_shapes() -> Array[CollisionShape2D]:
+	var shapes: Array[CollisionShape2D] = []
+	for rect in tidbit_rects():
+		var box := RectangleShape2D.new()
+		box.size = rect.size
+		var shape := CollisionShape2D.new()
+		shape.shape = box
+		shape.position = rect.get_center()
+		shapes.append(shape)
+	return shapes
+
+
 func can_equip() -> bool:
 	return find_handle() != NO_CELL
 

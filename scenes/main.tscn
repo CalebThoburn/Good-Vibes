@@ -16,7 +16,7 @@ world = NodePath("../World")
 
 [node name="WorldLight" type="CanvasModulate" parent="."]
 
-[node name="SunShade" type="CanvasLayer" parent="." node_paths=PackedStringArray("sky")]
+[node name="SunShade" type="Node" parent="." node_paths=PackedStringArray("sky")]
 script = ExtResource("5_shade")
 sky = NodePath("../Sky")
 

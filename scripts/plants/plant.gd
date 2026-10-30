@@ -2,28 +2,38 @@ class_name Plant
 extends Node2D
 ## A living plant: a branching structure of parts (PlantPart) standing on a terrain
 ## block. Leaves turn light into energy and roots in soil draw nutrients. Both flow
-## through the plant: each part feeds itself from what it and the parts beyond it make,
-## the rest pools at the base, and the pool tops up whatever went short, core first. A
-## part that goes short for too long falls apart, taking everything beyond it with it.
+## through the plant into one pool, which feeds leaves and roots first and then stems from
+## the trunk outward. A part that goes short for too long falls apart, taking everything
+## beyond it with it.
 ##
 ## Spare resources go into growing whatever the plant is shortest of: roots for
 ## nutrients, leaves and stems for energy. Stems grow at right angles and lengthen and
 ## thicken with age. Two forms (PlantSpecies.Form):
 ## - Trees branch upward. Every branch turns a corner and gets a small leaf on its tip,
 ##   and the tree grows one main leaf mass on its trunk line (a few on big trees). Leaves
-##   stay in the crown, and the trunk keeps stretching to lift the crown. Branches sit in
-##   three depth layers that shift a little against each other as the camera passes.
+##   stay in the crown, and the trunk keeps stretching to lift the crown. Branches cost
+##   energy, and one whose own leaves can't pay for it is shed, so trees stay covered.
+##   Branches are drawn in one layer, level with the player; each leaf patch sits in a
+##   layer behind or in front of them, and the two leaf layers shift a little against the
+##   branches as the camera passes.
 ## - Creepers (grass) send runners sideways over the ground, climbing up and dropping
 ##   down steps within limits, with blades along them that grow taller only when there's
-##   nowhere left to spread and the light is good.
+##   nowhere left to spread and the light is good. Drawn with the front leaves.
 ## Stepped by Flora's random ticks.
 
 ## Each leaf re-measures its light every this many steps; they take turns.
 const LIGHT_ROUNDS := 8
-const DEPTHS: Array[int] = [-1, 0, 1]
-## How far a depth layer shifts per pixel the camera is off to the side of the plant.
+## Leaf layers: behind the branches and in front of them.
+const LEAF_DEPTHS: Array[int] = [-1, 1]
+## Draw order, back to front (blocks are at 0, in front of all of it). The player is
+## drawn level with the branches.
+const Z_ROOTS := -4
+const Z_BACK_LEAVES := -3
+const Z_BRANCHES := -2
+const Z_FRONT_LEAVES := -1
+## How far a leaf layer shifts per pixel the camera is off to the side of the plant.
 const LAYER_PARALLAX := 0.012
-## Back layers are drawn a little darker so the layers read apart.
+## Back leaves are drawn a little darker so the layers read apart.
 const BACK_TINT := Color(0.8, 0.8, 0.87)
 ## Plants further than this from the camera's center (world px) skip drawing updates.
 const ACTIVE_REACH := 500.0
@@ -31,6 +41,11 @@ const ACTIVE_REACH := 500.0
 const REDRAW_INTERVAL := 0.4
 ## Creeping runners sit this far above the ground they cover, in pixels.
 const RUNNER_HEIGHT := 1.0
+## New branches won't spend reserves below this many seconds of running at a loss.
+const RESERVE_SECONDS := 15.0
+## Trees only add branches while their leaves make this many times what the tree uses,
+## or their reserves are full anyway.
+const BRANCH_SURPLUS := 1.1
 
 static var _wind: ShaderMaterial
 
@@ -54,17 +69,20 @@ var _tuft := 1.0
 # Totals from the last step, as Vector2(energy, nutrients).
 var _supply := Vector2.ZERO
 var _demand := Vector2.ZERO
+# How much more it used than it made per second, from the last step (0 if it made more).
+var _drain_rate := Vector2.ZERO
 var _light_round := 0
 var _roots := Sprite2D.new()
-# Per depth: a layer holding that depth's wood and, on top, its leaves.
-var _layers: Dictionary[int, Node2D] = {}
-var _wood: Dictionary[int, Sprite2D] = {}
+var _wood := Sprite2D.new()
+# Per leaf depth (-1 behind the branches, 1 in front).
 var _leaves: Dictionary[int, Sprite2D] = {}
 var _hitbox := Area2D.new()
 # Each leaf's drawn decline level and size; the art is redrawn when these change.
 var _leaf_levels: Dictionary[PlantPart, int] = {}
 var _leaf_sizes: Dictionary[PlantPart, int] = {}
 var _art_dirty := true
+# Where each leaf layer's art sits before parallax.
+var _leaf_origins: Dictionary[int, float] = {}
 var _redraw_wait := 0.0
 # Shade cells this plant's leaves are counted in (see Flora.shade).
 var _shade_cells: Array[Vector2i] = []
@@ -75,22 +93,20 @@ func _init() -> void:
 		_wind = ShaderMaterial.new()
 		_wind.shader = preload("res://shaders/leaf_wind.gdshader")
 	_roots.centered = false
-	_roots.z_index = -1 # Behind the terrain, so roots stay hidden in the ground.
+	_roots.z_index = Z_ROOTS # Behind the terrain, so roots stay hidden in the ground.
 	add_child(_roots)
-	for depth in DEPTHS: # Added back to front, so they draw in that order.
-		var layer := Node2D.new()
-		if depth < 0:
-			layer.modulate = BACK_TINT
-		var wood := Sprite2D.new()
-		wood.centered = false
-		layer.add_child(wood)
+	_wood.centered = false
+	_wood.z_index = Z_BRANCHES
+	_wood.material = SunShade.lit_material()
+	add_child(_wood)
+	for depth in LEAF_DEPTHS:
 		var leaves := Sprite2D.new()
 		leaves.centered = false
 		leaves.material = _wind
-		layer.add_child(leaves)
-		add_child(layer)
-		_layers[depth] = layer
-		_wood[depth] = wood
+		leaves.z_index = Z_BACK_LEAVES if depth < 0 else Z_FRONT_LEAVES
+		if depth < 0:
+			leaves.modulate = BACK_TINT
+		add_child(leaves)
 		_leaves[depth] = leaves
 	_hitbox.collision_layer = BlockWorld.PLANT_LAYER
 	_hitbox.collision_mask = 0
@@ -108,20 +124,20 @@ func setup(p_species: PlantSpecies, p_flora: Flora, p_anchor_cell: Vector2i, see
 	_max_parts = roundi(species.max_parts * _rng.randf_range(0.55, 1.15))
 	reserves = species.sapling_reserves
 	if _creeping():
+		_wood.z_index = Z_FRONT_LEAVES # Grass sits with the front leaves.
 		var base := _add_segment(PlantPart.Kind.STEM, null, Vector2i.UP, RUNNER_HEIGHT, 0)
 		base.length = RUNNER_HEIGHT
-		_add_leaf(base, Vector2.ZERO, 0)
+		_add_leaf(base, Vector2.ZERO)
 	else:
 		var base := _add_segment(PlantPart.Kind.STEM, null, Vector2i.UP, species.segment_length, 0)
-		_add_leaf(base, Vector2(0.0, -species.min_leaf_size * 0.5), 0)
+		_add_leaf(base, Vector2(0.0, -species.min_leaf_size * 0.5))
 	_add_segment(PlantPart.Kind.ROOT, parts[0], Vector2i.DOWN, species.segment_length * 0.6, 0)
 	_rebuild()
 
 
 func step(dt: float) -> void:
 	age += dt
-	if not flora.world.terrain.has_block(anchor_cell):
-		fall()
+	if not check_support():
 		return
 	_measure(dt)
 	_distribute()
@@ -141,6 +157,30 @@ func step(dt: float) -> void:
 				_art_dirty = true
 	if changed:
 		_rebuild()
+
+
+## Lets go of anything the ground has gone from under: the whole plant if its anchor
+## block is gone, or for creepers, any runner left with nothing to lie on or climb.
+## Returns whether the plant is still standing.
+func check_support() -> bool:
+	if not flora.world.terrain.has_block(anchor_cell):
+		fall()
+		return false
+	if not _creeping():
+		return true
+	var below := Vector2(0.0, RUNNER_HEIGHT + 1.0)
+	for part in parts.duplicate():
+		if part == parts[0] or part.kind != PlantPart.Kind.STEM or not parts.has(part):
+			continue
+		var held: bool
+		if part.direction.y == 0: # Lying on the ground.
+			held = _solid_at(part.start + below) or _solid_at(part.end + below)
+		else: # Up or down a wall.
+			var wall := Vector2(part.run) * (1.0 if part.direction == Vector2i.UP else -1.0)
+			held = _solid_at((part.start + part.end) * 0.5 + wall * 2.0)
+		if not held:
+			cut(part)
+	return true
 
 
 ## Cuts a part off, along with everything beyond it. Cutting the base fells the plant.
@@ -182,24 +222,25 @@ func _process(delta: float) -> void:
 	var off_center := camera.get_screen_center_position().x - global_position.x
 	if absf(off_center) > ACTIVE_REACH:
 		return # Off screen: art waits until it's seen.
-	for depth in DEPTHS:
-		# Nearer layers slide further against the camera's motion.
-		_layers[depth].position.x = -off_center * depth * LAYER_PARALLAX
 	_redraw_wait -= delta
 	if _art_dirty and _redraw_wait <= 0.0:
 		_render_art()
+	if not _creeping(): # After any redraw, so the layers never show unshifted for a frame.
+		for depth in LEAF_DEPTHS: # Front leaves slide against the camera's motion, back ones with it.
+			_leaves[depth].position.x = roundf(_leaf_origins.get(depth, 0.0) - off_center * depth * LAYER_PARALLAX)
 
 
 func _render_art() -> void:
 	_art_dirty = false
 	_redraw_wait = REDRAW_INTERVAL
-	for depth in DEPTHS:
-		var wood := PlantRenderer.render(species, parts, [PlantPart.Kind.STEM], depth)
-		_wood[depth].texture = wood[0]
-		_wood[depth].position = wood[1]
+	var wood := PlantRenderer.render(species, parts, [PlantPart.Kind.STEM])
+	_wood.texture = wood[0]
+	_wood.position = wood[1]
+	for depth in LEAF_DEPTHS:
 		var leaves := PlantRenderer.render_leaves(species, parts, depth, _leaf_levels)
 		_leaves[depth].texture = leaves[0]
 		_leaves[depth].position = leaves[1]
+		_leaf_origins[depth] = leaves[1].x
 	var roots := PlantRenderer.render(species, parts, [PlantPart.Kind.ROOT])
 	_roots.texture = roots[0]
 	_roots.position = roots[1]
@@ -222,11 +263,11 @@ func _add_segment(kind: PlantPart.Kind, parent: PlantPart, direction: Vector2i, 
 	return _attach(part)
 
 
-func _add_leaf(parent: PlantPart, offset: Vector2, depth: int) -> PlantPart:
+func _add_leaf(parent: PlantPart, offset: Vector2) -> PlantPart:
 	var part := PlantPart.new(PlantPart.Kind.LEAF, parent)
 	part.offset = offset.round()
 	part.size_cap = _leaf_cap(parent)
-	part.depth = depth
+	part.depth = _leaf_depth()
 	part.phase = _rng.randf() * TAU
 	part.variant = _rng.randi() % PlantRenderer.LEAF_VARIANTS
 	_attach(part)
@@ -284,26 +325,35 @@ func _measure(dt: float) -> void:
 			PlantPart.Kind.ROOT:
 				var in_soil := flora.is_soil(to_global(part.end), species)
 				part.production = Vector2(0.0, species.root_uptake * dt) if in_soil else Vector2.ZERO
-				part.need = species.wood_upkeep * part.length * part.thickness * dt
+				part.need = species.root_upkeep * part.length * part.thickness * dt
 		_supply += part.production
 		_demand += part.need
+	_drain_rate = ((_demand - _supply) / dt).max(Vector2.ZERO)
 
 
-## Feeds every part: locally first, then from the pooled surplus, core first.
+## Feeds every part from what the whole plant makes plus its reserves: leaves and roots
+## first (they're what keep it going), then stems from the trunk outward. So in hard
+## times it's the outer branches that go short and get shed, not the trunk. Also notes,
+## for each part, whether it and everything beyond it make what they cost.
 func _distribute() -> void:
 	for i in range(parts.size() - 1, -1, -1): # Children before parents.
 		var part := parts[i]
-		var available := part.production
+		part.flow = part.production - part.need
 		for child in part.children:
-			available += child.flow
-		part.met = available.min(part.need)
-		part.flow = available - part.met
-	reserves += parts[0].flow
-	for part in parts: # Parents before children: the core is fed first.
-		var top_up := (part.need - part.met).min(reserves)
-		part.met += top_up
-		reserves -= top_up
-	reserves = reserves.min(Vector2(5.0, 5.0) + species.reserve_per_part * parts.size())
+			part.flow += child.flow
+		part.pays_its_way = part.flow.x >= 0.0
+		reserves += part.production
+	for producers_first in [true, false]:
+		for part in parts: # Parents before children: the trunk before its branches.
+			if (part.kind != PlantPart.Kind.STEM) == producers_first:
+				part.met = part.need.min(reserves)
+				reserves -= part.met
+	reserves = reserves.min(_reserve_cap())
+
+
+## The most it can store.
+func _reserve_cap() -> Vector2:
+	return Vector2(10.0, 10.0) + species.reserve_per_part * parts.size()
 
 
 ## Lets go of parts that have gone short or been useless for too long. Returns whether
@@ -323,7 +373,11 @@ func _shed_failing_parts(dt: float) -> bool:
 				var lowest := crown_base * 0.6 if part.core else crown_base
 				useless = part.production.x < part.need.x or -part.end.y < lowest
 			PlantPart.Kind.STEM:
-				useless = part != parts[0] and part.leaves_carried == 0
+				# A branch its own leaves can't pay for, once they've had time to grow (the
+				# trunk line is spared).
+				var unpaid := not part.pays_its_way and part.age > species.leaf_grow_time
+				useless = part != parts[0] and (part.leaves_carried == 0 or unpaid) \
+						and part.leaves_carried * 2 < parts[0].leaves_carried
 			PlantPart.Kind.ROOT:
 				useless = part.production.y == 0.0
 		part.idle = part.idle + dt if useless else 0.0
@@ -357,10 +411,14 @@ func _chance(odds: float) -> bool:
 	return _rng.randf() < odds * _vigor
 
 
-func _pay(cost: Vector2) -> bool:
-	if reserves.x < cost.x or reserves.y < cost.y:
+## Spends reserves on growth. With `keep_buffer` (for branches, which cost to keep), only
+## if it leaves enough to ride out RESERVE_SECONDS of the plant running at a loss.
+func _pay(cost: Vector2, keep_buffer := false) -> bool:
+	var left := reserves - cost
+	var keep := _drain_rate * RESERVE_SECONDS if keep_buffer else Vector2.ZERO
+	if left.x < keep.x or left.y < keep.y:
 		return false
-	reserves -= cost
+	reserves = left
 	return true
 
 #endregion
@@ -394,16 +452,25 @@ func _grow(dt: float) -> bool:
 		return false
 	var energy_ratio := _supply.x / maxf(_demand.x, 0.0001)
 	var nutrient_ratio := _supply.y / maxf(_demand.y, 0.0001)
-	if nutrient_ratio < energy_ratio and _grow_root():
+	var short_of_nutrients := nutrient_ratio < energy_ratio
+	if short_of_nutrients and _grow_root():
 		return true
 	if _creeping():
 		return _grow_creeper()
-	return _grow_shoot() or _grow_root()
+	# Roots only when they're what's short: they cost energy to keep too.
+	return _grow_shoot() or (short_of_nutrients and _grow_root())
 
 
 ## A leaf or a stem: a leaf first on any bare branch end, otherwise leaning toward
-## leaves.
+## leaves. New branches only with energy to spare, since they cost to keep.
 func _grow_shoot() -> bool:
+	# Branch only once most leaves have filled out, and with energy to spare.
+	var leaves := parts.filter(func(part: PlantPart) -> bool: return part.kind == PlantPart.Kind.LEAF)
+	var young := leaves.filter(func(part: PlantPart) -> bool: return part.age < species.leaf_grow_time).size()
+	var can_branch := young * 3 <= leaves.size() \
+			and (_supply.x >= _demand.x * BRANCH_SURPLUS or reserves.x >= _reserve_cap().x * 0.9)
+	if not can_branch:
+		return _grow_leaf()
 	if not _bare_tips().is_empty() or _rng.randf() < 0.6:
 		return _grow_leaf() or _grow_stem()
 	return _grow_stem() or _grow_leaf()
@@ -437,7 +504,7 @@ func _grow_leaf() -> bool:
 	var along := Vector2(stem.direction)
 	var spread := _leaf_cap(stem) * 0.5
 	var offset := along * _rng.randf_range(-0.5, 0.2) * stem.target_length + along.orthogonal() * _rng.randf_range(-spread, spread)
-	_add_leaf(stem, offset, _branch_depth(stem.depth))
+	_add_leaf(stem, offset)
 	return true
 
 
@@ -469,10 +536,9 @@ func _grow_stem() -> bool:
 		if score > best_score:
 			best_score = score
 			best = direction
-	if best == Vector2i.ZERO or not _pay(species.stem_cost):
+	if best == Vector2i.ZERO or not _pay(species.stem_cost, true):
 		return false
-	var depth := parent.depth if best == parent.direction else _branch_depth(parent.depth)
-	var end := _add_segment(PlantPart.Kind.STEM, parent, best, length, depth)
+	var end := _add_segment(PlantPart.Kind.STEM, parent, best, length, 0)
 
 	# Branches turn a corner, so nothing grows dead straight.
 	if best != parent.direction or _rng.randf() < species.jog_chance:
@@ -481,8 +547,8 @@ func _grow_stem() -> bool:
 		var corner := parent.end + Vector2(best) * length
 		if not flora.is_solid(to_global(corner + Vector2(turn) * turn_length)) \
 				and not flora.is_solid(to_global(corner + Vector2(turn) * turn_length * 0.5)):
-			end = _add_segment(PlantPart.Kind.STEM, end, turn, turn_length, depth)
-	_add_leaf(end, Vector2(end.direction) * 2.0, depth) # Never a bare branch.
+			end = _add_segment(PlantPart.Kind.STEM, end, turn, turn_length, 0)
+	_add_leaf(end, Vector2(end.direction) * 2.0) # Never a bare branch.
 	return true
 
 
@@ -502,6 +568,7 @@ func _grow_core() -> bool:
 		return false
 	var mass := PlantPart.new(PlantPart.Kind.LEAF, best)
 	mass.core = true
+	mass.depth = _leaf_depth()
 	mass.size_cap = _core_size()
 	mass.phase = _rng.randf() * TAU
 	mass.variant = _rng.randi()
@@ -591,7 +658,7 @@ func _grow_blade(runner: PlantPart) -> bool:
 	if not _pay(species.leaf_cost):
 		return false
 	var back := -Vector2(runner.run) * _rng.randf_range(0.0, runner.length) if runner.direction.y == 0 else Vector2.ZERO
-	_add_leaf(runner, back, 0)
+	_add_leaf(runner, back)
 	return true
 
 
@@ -619,6 +686,11 @@ func _spread() -> bool:
 			continue
 		var runner := _add_segment(PlantPart.Kind.STEM, tip, step[0], step[1], 0)
 		runner.run = run
+		# The inside corner gets a curve only where the climb or drop meets the ground.
+		if step[0] == Vector2i.UP:
+			runner.fillet = tip.direction.y == 0
+		elif step[0] == Vector2i.DOWN:
+			runner.fillet = _solid_at(tip.end + Vector2.DOWN * (step[1] + RUNNER_HEIGHT + 1.0))
 		return true
 	return false
 
@@ -668,12 +740,10 @@ func _over_soil(local_point: Vector2) -> bool:
 	return flora.is_soil(to_global(local_point + Vector2(0.0, RUNNER_HEIGHT + 1.0)), species)
 
 
-## Mostly the parent's depth, sometimes a step in front of or behind it. Creepers stay
-## in one layer.
-func _branch_depth(parent_depth: int) -> int:
-	if _creeping() or _rng.randf() >= species.depth_change_chance:
-		return parent_depth
-	return clampi(parent_depth + (1 if _rng.randf() < 0.5 else -1), DEPTHS[0], DEPTHS[-1])
+## Which leaf layer a new leaf goes in: behind or in front of the branches, at random.
+## Grass blades all go in front.
+func _leaf_depth() -> int:
+	return 1 if _creeping() or _rng.randf() < 0.5 else -1
 
 
 ## How big a small leaf (or a creeper's blade) grows. Main leaf masses are sized by

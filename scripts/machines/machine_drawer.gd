@@ -16,11 +16,13 @@ static func link_color(kind: MachineDesign.Link) -> Color:
 	return WIRE_COLOR if kind == MachineDesign.Link.WIRE else PIPE_COLOR
 
 
-## In machine space: MachineDesign.SIZE * TIDBIT_PIXELS square, centered on the origin.
+## In machine space (centered on the origin). Only cells with tidbits are drawn, each on a
+## dark backing; empty cells are see-through.
 static func draw_world(canvas: CanvasItem, design: MachineDesign) -> void:
 	var size := MachineDesign.SIZE * MachineDesign.TIDBIT_PIXELS
 	var origin := -Vector2.ONE * size * 0.5
-	canvas.draw_rect(Rect2(origin, Vector2.ONE * size), FRAME_COLOR)
+	for rect in design.tidbit_rects():
+		canvas.draw_rect(rect, FRAME_COLOR)
 	draw_tidbits(canvas, design, origin, MachineDesign.TIDBIT_PIXELS)
 
 

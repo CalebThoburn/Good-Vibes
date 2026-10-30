@@ -63,9 +63,10 @@ func _physics_process(delta: float) -> void:
 
 
 ## Scatters young plants of every species over the surface, then lets them grow for
-## prewarm_time.
+## prewarm_time. From then on, plants react straight away when the terrain changes.
 func populate(seed_value: int) -> void:
 	_rng.seed = seed_value
+	world.terrain.changed.connect(_on_terrain_changed)
 	for kind in species.values():
 		var gap: Vector2i = SCATTER_GAPS.get(kind.id, Vector2i(8, 20))
 		var x := _rng.randi_range(3, 10)
@@ -76,6 +77,14 @@ func populate(seed_value: int) -> void:
 			x += _rng.randi_range(gap.x, gap.y)
 	for i in roundi(prewarm_time / TICK_TIME):
 		step_all(TICK_TIME)
+
+
+## Anything the ground has gone from under falls.
+func _on_terrain_changed() -> void:
+	_to_terrain = world.terrain.global_transform.affine_inverse()
+	for plant in plants.duplicate():
+		if not plant.is_queued_for_deletion():
+			plant.check_support()
 
 
 ## Steps every plant once.
@@ -233,6 +242,7 @@ func _crumble(points: PackedVector2Array, color: Color) -> void:
 	fade.set_color(1, Color(color, 0.0))
 	particles.color_ramp = fade
 	particles.visibility_layer = SunShade.NO_SHADE_LAYER
+	particles.z_index = Plant.Z_FRONT_LEAVES
 	add_child(particles)
 	particles.emitting = true
 	particles.finished.connect(particles.queue_free)

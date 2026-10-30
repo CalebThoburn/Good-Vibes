@@ -17,11 +17,6 @@ func _init() -> void:
 	hitbox.collision_mask = 0
 	hitbox.monitoring = false
 	hitbox.process_mode = PROCESS_MODE_DISABLED # Until something is held.
-	var shape := RectangleShape2D.new()
-	shape.size = Vector2.ONE * MachineDesign.SIZE * MachineDesign.TIDBIT_PIXELS
-	var collision := CollisionShape2D.new()
-	collision.shape = shape
-	hitbox.add_child(collision)
 	view.add_child(hitbox)
 
 
@@ -30,8 +25,12 @@ func get_design() -> MachineDesign:
 
 
 func hold(design: MachineDesign, world: BlockWorld, holder: PhysicsBody2D) -> void:
+	for shape in hitbox.get_children():
+		shape.free()
 	if design:
 		view.position = -MachineDesign.cell_position(design.find_handle())
+		for shape in design.collision_shapes(): # Only where its tidbits are.
+			hitbox.add_child(shape)
 	view.run(design, world, holder)
 	if view.machine:
 		view.machine.self_colliders.append(hitbox.get_rid())

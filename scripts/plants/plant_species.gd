@@ -64,8 +64,6 @@ enum Form { TREE, CREEPER }
 @export var tuft_light := 0.6
 ## Blades grow up to this many times tip_leaf_size as the plant tufts up.
 @export var max_tuft := 2.0
-## Chance a new branch or leaf sits a layer in front of or behind its parent.
-@export var depth_change_chance := 0.35
 ## Most stems that can grow from one stem.
 @export var max_branches := 2
 ## Most leaves on one stem.
@@ -84,12 +82,13 @@ enum Form { TREE, CREEPER }
 @export var soil: Array[StringName] = [&"dirt"]
 ## Upkeep per leaf of leaf_area_size.
 @export var leaf_upkeep := Vector2(0.5, 0.08)
-## Upkeep per square pixel of stem or root (length × thickness).
-@export var wood_upkeep := Vector2(0.003, 0.001)
+## Upkeep per square pixel (length × thickness) of stem, and of root.
+@export var wood_upkeep := Vector2(0.006, 0.001)
+@export var root_upkeep := Vector2(0.002, 0.0005)
 ## How long a part can go short before it falls apart, in seconds' worth of shortfall.
 @export var starve_time := 20.0
-## Leaves that don't earn their upkeep, leafless branches, and roots out of soil are
-## shed after this long.
+## Leaves that don't earn their upkeep, branches whose own leaves don't pay for them,
+## and roots out of soil are shed after this long.
 @export var shed_time := 25.0
 ## Stored resources allowed per part, on top of a small base amount.
 @export var reserve_per_part := Vector2(1.2, 0.8)

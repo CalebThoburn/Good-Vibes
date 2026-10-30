@@ -18,12 +18,16 @@ var target_length := 0.0
 var base_length := 0.0
 ## Creeping stems: the sideways way the runner is spreading, kept through climbs and drops.
 var run := Vector2i.ZERO
+## Creeping stems that climb or drop: whether their foot meets the ground, so the inside
+## corner there gets a curve.
+var fillet := false
 ## Stems and roots: width in pixels. Leaves: 1 (they're quick to cut).
 var thickness := 1.0
 ## Leaves: where it sits relative to the end of the stem it's on (a square's center, or
 ## the foot of a grass blade).
 var offset := Vector2.ZERO
-## Which layer it's drawn in: -1 behind, 0 middle, 1 in front.
+## Which layer it's drawn in: stems and roots 0; leaves -1 (behind the branches) or 1
+## (in front of them).
 var depth := 0
 ## Seconds of plant time since it grew.
 var age := 0.0
@@ -53,7 +57,10 @@ var light := 1.0
 var production := Vector2.ZERO
 var need := Vector2.ZERO
 var met := Vector2.ZERO
-var flow := Vector2.ZERO # Left over after feeding this part, heading for the base.
+## What this part and everything beyond it made, less what they needed.
+var flow := Vector2.ZERO
+## Whether this part and everything beyond it made the energy they needed last step.
+var pays_its_way := true
 
 var leaves_carried := 0
 var roots_carried := 0

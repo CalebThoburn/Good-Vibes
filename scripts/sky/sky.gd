@@ -60,10 +60,15 @@ const CLOUD_SPAN := 2400.0
 const STAR_SPAN := Vector2(1600.0, 700.0)
 const STAR_COUNT := 900
 const SUN_SIZE := 22
-## The sun and moon travel a circle around this point (fractions of the screen), with
-## this radius (a fraction of the screen height).
+## The sun and moon travel round this point (fractions of the screen): a circle of this
+## radius (a fraction of the screen height) above the horizon, stretched BELOW_STRETCH
+## times deeper below it, so by night they're far beneath the player.
 const ORBIT_CENTER := Vector2(0.5, 0.8)
 const ORBIT_RADIUS := 0.64
+const BELOW_STRETCH := 4.0
+## How much the sun and moon linger overhead and hurry through the night (0 = steady,
+## under 1). They move 1 - EASE as fast at their highest and 1 + EASE at their lowest.
+const EASE := 0.4
 ## Days from new moon to new moon. Each day the moon rises later by 1 / this of a day.
 const LUNAR_MONTH := 8.0
 ## Lowest angle (radians above the horizon) the sun or moon lights from, so shadows
@@ -129,15 +134,29 @@ func _half_day() -> float:
 	return (time_of_day if time_of_day <= 0.5 else 1.0 - time_of_day) * 2.0
 
 
-## Where the sun is on its circle: 0 at noon (straight up), ±PI at midnight.
+## Where the sun is on its path: 0 at noon (straight up), ±PI at midnight.
 func sun_angle() -> float:
-	return (time_of_day - 0.5) * TAU
+	return _eased_angle(time_of_day)
 
 
 ## The moon trails the sun by its phase, so it rises later every day: with the sun at
 ## new moon, opposite it at full.
 func moon_angle() -> float:
-	return sun_angle() - moon_phase() * TAU
+	return _eased_angle(time_of_day - moon_phase())
+
+
+## The angle for a time of day: slow near the top of the path, quick near the bottom.
+static func _eased_angle(time: float) -> float:
+	var turn := (fposmod(time, 1.0) - 0.5) * TAU
+	return turn - EASE * sin(turn)
+
+
+## Where a body at `angle` sits on screen: on a circle above the horizon, far below it
+## when down, so it sinks smoothly out of view instead of vanishing.
+func _orbit_position(angle: float, screen: Vector2) -> Vector2:
+	var radius := screen.y * ORBIT_RADIUS
+	var down := -cos(angle) # Screen y points down.
+	return screen * ORBIT_CENTER + Vector2(sin(angle), down * (1.0 if down < 0.0 else BELOW_STRETCH)) * radius
 
 
 ## 0 new, 0.5 full, back to 1.
@@ -241,16 +260,14 @@ func _draw_stars(screen: Vector2, pixel: float, darkness: float) -> void:
 		_canvas.draw_rect(Rect2(at, Vector2.ONE * pixel), Color(1.0, 0.97, 0.88, darkness * twinkle))
 
 
-## The sun and moon, gliding round their circle. The moon shows its phase, lit from the
+## The sun and moon, gliding round their path. The moon shows its phase, lit from the
 ## sun's side, with the dark part faintly visible.
 func _draw_celestial(screen: Vector2, pixel: float) -> void:
-	var center := screen * ORBIT_CENTER
-	var radius := screen.y * ORBIT_RADIUS
 	var day := daylight()
 
-	var moon_at := center + Vector2(sin(moon_angle()), -cos(moon_angle())) * radius
+	var moon_at := _orbit_position(moon_angle(), screen)
 	var moon_size := MOON_SIZE * pixel
-	if moon_at.y < center.y + moon_size:
+	if moon_at.y < screen.y + moon_size:
 		var corner := moon_at - Vector2.ONE * moon_size * 0.5
 		var fade := lerpf(1.0, 0.55, day) # Paler by day.
 		var lit := moon_illumination()
@@ -260,9 +277,9 @@ func _draw_celestial(screen: Vector2, pixel: float) -> void:
 		var lit_x := corner.x + moon_size - lit_width if waxing else corner.x
 		_canvas.draw_rect(Rect2(Vector2(lit_x, corner.y), Vector2(lit_width, moon_size)), Color(0.92, 0.92, 1.0, fade))
 
-	var sun_at := center + Vector2(sin(sun_angle()), -cos(sun_angle())) * radius
+	var sun_at := _orbit_position(sun_angle(), screen)
 	var sun_size := SUN_SIZE * pixel
-	if sun_at.y < center.y + sun_size:
+	if sun_at.y < screen.y + sun_size * 2.0:
 		var corner := sun_at - Vector2.ONE * sun_size * 0.5
 		for glow in [[6.0, 0.15], [3.0, 0.3]]:
 			var grow: float = glow[0] * pixel

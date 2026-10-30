@@ -43,6 +43,7 @@ func _init() -> void:
 	_tiles.name = "Tiles"
 	_tiles.tile_set = Blocks.tile_set
 	_tiles.collision_enabled = false # Collision is built from merged rectangles instead.
+	_tiles.material = SunShade.lit_material()
 	add_child(_tiles)
 
 

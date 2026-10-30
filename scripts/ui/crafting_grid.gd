@@ -3,9 +3,10 @@ extends Control
 ## The workbench grid. Drag tidbits in and around, R rotates the hovered tidbit (or
 ## switches its setting, for tidbits like triggers), and
 ## right-clicking two ports (or two valves) links them. Linking them again unlinks them.
-## Items dropped on a tidbit attach to it as upgrades. Badges show attached upgrades and,
-## tinted, whatever the tidbit holds; drag a badge to take it off again. Held things
-## can only be taken out here: they get in by pipe or suction.
+## Items dropped on a tidbit attach to it if they're an upgrade for it, or are loaded
+## into its storage if it holds them (wood into a lantern, blocks into a launcher).
+## Badges show attached upgrades and, tinted, whatever the tidbit holds; drag a badge to
+## take it off or move it to another tidbit.
 
 const CELL := 56.0
 const CONNECTOR_PICK_RADIUS := 10.0
@@ -123,8 +124,7 @@ func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 		&"machine":
 			return design.is_empty() and not data.has("from_cell")
 		&"item":
-			return not data.get("stored", false) and cell != data.get("from_cell") \
-					and design.item_room(cell, data.item.id) > 0
+			return cell != data.get("from_cell") and inventory.takes_item(cell, data.item.id)
 	return false
 
 
@@ -132,9 +132,12 @@ func _drop_data(at_position: Vector2, data: Variant) -> void:
 	if data.kind == &"machine":
 		inventory.edit_machine(data.machine)
 	elif data.kind == &"item":
-		if data.has("from_cell"):
-			inventory.detach_item(data.from_cell, data.item.id, data.amount)
-		inventory.attach_item(_cell_at(at_position), data.item.id, data.amount)
+		if data.has("from_cell"): # Off the tidbit it was on first; anything that won't fit stays in the inventory.
+			if data.stored:
+				inventory.unstore_item(data.from_cell, data.item.id, data.amount)
+			else:
+				inventory.detach_item(data.from_cell, data.item.id, data.amount)
+		inventory.put_item(_cell_at(at_position), data.item.id, data.amount)
 	elif data.has("from_cell"):
 		inventory.move_tidbit(data.from_cell, _cell_at(at_position))
 	else:

@@ -7,7 +7,8 @@ extends Node2D
 ## decides who moves: suction pulls them together, blowing pushes them apart. Flush
 ## against something the force triples, so a blower makes a strong jet against a wall.
 ## Suction also grips what it's flush against, so it can cling to walls, and swallows
-## loose single blocks and machines that reach the nozzle into the vacuum's storage.
+## loose single blocks, machines and cut pieces of tree (as wood) that reach the nozzle
+## into the vacuum's storage.
 
 enum Mode { SUCK, BLOW }
 
@@ -117,8 +118,19 @@ func _nearest_hit(aim: Vector2) -> Dictionary:
 	return nearest
 
 
-## Takes a loose single block or a placed machine into storage. Returns whether it did.
+## Takes a loose single block, a placed machine, or a cut piece of tree (as wood) into
+## storage. Returns whether it did.
 func _swallow(body: PhysicsBody2D) -> bool:
+	if body is PlantDebris:
+		var taken := 0
+		for i in body.wood(): # Whatever doesn't fit is lost with the rest of it.
+			if not machine.give(cell, &"wood"):
+				break
+			taken += 1
+		if taken == 0:
+			return false
+		body.queue_free()
+		return true
 	var thing: Variant = null
 	if body is BlockBody and body.grid.cells.size() == 1:
 		thing = Blocks.get_type(body.grid.cells.values()[0]).id

@@ -6,6 +6,10 @@ extends Node2D
 var machine: Machine
 
 
+func _init() -> void:
+	material = SunShade.lit_material()
+
+
 ## Starts running a design, or stops when `design` is null.
 func run(design: MachineDesign, world: BlockWorld, holder: PhysicsBody2D) -> void:
 	machine = Machine.new(design, self, world, holder) if design else null

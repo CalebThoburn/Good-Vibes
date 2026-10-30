@@ -72,6 +72,37 @@ func attach_item(cell: Vector2i, item_id: StringName, amount: int) -> int:
 	return amount
 
 
+## Puts up to `amount` of an item into a workbench tidbit: attached as an upgrade if it
+## takes that item, otherwise loaded into its storage if it holds that. Returns how many
+## went in.
+func put_item(cell: Vector2i, item_id: StringName, amount: int) -> int:
+	if workbench.item_room(cell, item_id) > 0:
+		return attach_item(cell, item_id, amount)
+	return load_item(cell, item_id, amount)
+
+
+## Loads up to `amount` of an item into a workbench tidbit's storage. Returns how many.
+func load_item(cell: Vector2i, item_id: StringName, amount: int) -> int:
+	var type := workbench.get_tidbit(cell)
+	if type == null or not type.can_store(item_id):
+		return 0
+	amount = mini(amount, mini(item_count(item_id), workbench.store_room(cell)))
+	if amount <= 0:
+		return 0
+	items[item_id] -= amount
+	workbench.store(cell, item_id, amount)
+	changed.emit()
+	return amount
+
+
+## Whether some of an item could go into a workbench tidbit (see put_item).
+func takes_item(cell: Vector2i, item_id: StringName) -> bool:
+	var type := workbench.get_tidbit(cell)
+	if type == null:
+		return false
+	return workbench.item_room(cell, item_id) > 0 or (type.can_store(item_id) and workbench.store_room(cell) > 0)
+
+
 ## Takes up to `amount` of an item off a workbench tidbit and back into the inventory.
 func detach_item(cell: Vector2i, item_id: StringName, amount: int) -> void:
 	amount = mini(amount, workbench.item_count(cell, item_id))

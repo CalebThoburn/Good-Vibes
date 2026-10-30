@@ -1,7 +1,7 @@
 class_name ItemSlot
 extends Control
-## One kind of item in the inventory. Drag it onto a workbench tidbit to attach it, or
-## drop items from workbench tidbits here to take them out. Dragging moves one; hold
+## One kind of item in the inventory. Drag it onto a workbench tidbit to attach or load
+## it, or drop items from workbench tidbits here to take them out. Dragging moves one; hold
 ## Shift for all.
 
 const SIZE := 52.0
@@ -31,7 +31,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	tooltip_text = "%s\n%s\nDrag onto a tidbit to attach (Shift: whole stack)." % [type.display_name, type.description]
+	tooltip_text = "%s\n%s\nDrag onto a tidbit to attach or load it (Shift: whole stack)." % [type.display_name, type.description]
 	inventory.changed.connect(queue_redraw)
 
 

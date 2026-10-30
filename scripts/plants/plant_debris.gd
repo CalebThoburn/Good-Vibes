@@ -4,6 +4,8 @@ extends RigidBody2D
 
 const LIFETIME := 25.0
 const MASS_PER_AREA := 0.08
+## Square pixels of stem per piece of wood it gives when sucked up.
+const AREA_PER_WOOD := 60.0
 
 var flora: Flora
 var species: PlantSpecies
@@ -17,6 +19,7 @@ func _init(p_flora: Flora, p_species: PlantSpecies, p_parts: Array[PlantPart], g
 	species = p_species
 	parts = p_parts
 	transform = global_xform # Flora sits at the world origin.
+	z_index = Plant.Z_BRANCHES
 	collision_layer = BlockWorld.BLOCK_LAYER
 	collision_mask = BlockWorld.BLOCK_LAYER | BlockWorld.PLAYER_LAYER | BlockWorld.MACHINE_LAYER
 	var area := 0.0
@@ -36,6 +39,7 @@ func _init(p_flora: Flora, p_species: PlantSpecies, p_parts: Array[PlantPart], g
 	var art := PlantRenderer.render(species, parts, [PlantPart.Kind.STEM, PlantPart.Kind.LEAF])
 	var sprite := Sprite2D.new()
 	sprite.centered = false
+	sprite.material = SunShade.lit_material()
 	sprite.texture = art[0]
 	sprite.position = art[1]
 	add_child(sprite)
@@ -44,6 +48,15 @@ func _init(p_flora: Flora, p_species: PlantSpecies, p_parts: Array[PlantPart], g
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		PlantPart.unlink(parts)
+
+
+## How much wood this piece is worth.
+func wood() -> int:
+	var area := 0.0
+	for part in parts:
+		if part.kind == PlantPart.Kind.STEM:
+			area += part.length * part.thickness
+	return maxi(roundi(area / AREA_PER_WOOD), 1)
 
 
 func _physics_process(delta: float) -> void:

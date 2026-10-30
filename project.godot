@@ -101,3 +101,50 @@ textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+
+[shader_globals]
+
+sun_occupancy={
+"type": "sampler2D",
+"value": ""
+}
+sun_world_to_uv={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+sun_step={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+sun_step_left={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+sun_step_right={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+sun_density={
+"type": "float",
+"value": 0.0
+}
+sun_ambient={
+"type": "float",
+"value": 1.0
+}
+sun_screen_size={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+sun_lamps={
+"type": "sampler2D",
+"value": ""
+}
+sun_lamp_count={
+"type": "int",
+"value": 0
+}
+sun_tint={
+"type": "vec4",
+"value": Vector4(1, 1, 1, 1)
+}

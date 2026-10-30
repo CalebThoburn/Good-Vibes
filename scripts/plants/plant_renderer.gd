@@ -47,7 +47,9 @@ static func render(species: PlantSpecies, parts: Array[PlantPart], kinds: Array[
 
 
 ## Renders the leaves at one depth, with each leaf's decline level from `levels`.
-## Returns [texture, top-left], or [null, ZERO] if there are none.
+## Returns [texture, top-left], or [null, ZERO] if there are none. The texture is a
+## CanvasTexture whose normal map holds each pixel's give in the wind (see _paint_give):
+## 0 where its leaf joins the branch, rising to 1 at the leaf's far edge.
 static func render_leaves(species: PlantSpecies, parts: Array[PlantPart], depth: int, levels: Dictionary) -> Array:
 	var leaves: Array[PlantPart] = []
 	for part in parts:
@@ -56,8 +58,14 @@ static func render_leaves(species: PlantSpecies, parts: Array[PlantPart], depth:
 	var canvas := _canvas_for(species, leaves)
 	if canvas.is_empty():
 		return [null, Vector2.ZERO]
-	_paint_leaves(canvas[0], canvas[1], species, leaves, levels, false)
-	return [ImageTexture.create_from_image(canvas[0]), Vector2(canvas[1])]
+	var image: Image = canvas[0]
+	_paint_leaves(image, canvas[1], species, leaves, levels, false)
+	var give := Image.create_empty(image.get_width(), image.get_height(), false, Image.FORMAT_L8)
+	_paint_give(give, canvas[1], species, leaves)
+	var texture := CanvasTexture.new()
+	texture.diffuse_texture = ImageTexture.create_from_image(image)
+	texture.normal_texture = ImageTexture.create_from_image(give)
+	return [texture, Vector2(canvas[1])]
 
 
 ## The pixels a part covers, in plant space.
@@ -69,7 +77,7 @@ static func footprint(species: PlantSpecies, part: PlantPart) -> Rect2i:
 			bounds = bounds.merge(rect)
 		return bounds
 	var rect := bar_rect(part)
-	if _creeping(species) and part.kind == PlantPart.Kind.STEM and part.direction.y != 0:
+	if _creeping(species) and part.kind == PlantPart.Kind.STEM and part.fillet:
 		rect = rect.grow(FILLET) # Room for the corner curve.
 	return rect
 
@@ -174,6 +182,19 @@ static func _paint_leaves(image: Image, origin: Vector2i, species: PlantSpecies,
 	image.copy_from(shaded)
 
 
+## How far each leaf pixel may move in the wind: 0 where the leaf joins its branch (so
+## leaves always stay attached), rising to 1 a leaf's width away.
+static func _paint_give(image: Image, origin: Vector2i, species: PlantSpecies, leaves: Array) -> void:
+	for part: PlantPart in leaves:
+		var joint := part.start # The end of the stem it grows from.
+		var reach := maxf(leaf_size(species, part) * 0.9, 4.0)
+		for rect in _leaf_rects(species, part):
+			for y in range(rect.position.y, rect.end.y):
+				for x in range(rect.position.x, rect.end.x):
+					var give := clampf(Vector2(x + 0.5, y + 0.5).distance_to(joint) / reach, 0.0, 1.0)
+					image.set_pixel(x - origin.x, y - origin.y, Color(give, give, give))
+
+
 ## A bar of bark, with a darker edge on its shaded side once it's thick enough. Grass
 ## climbing or dropping a step also fills the inside corner at its foot with a curve.
 static func _draw_bar(image: Image, origin: Vector2i, species: PlantSpecies, part: PlantPart) -> void:
@@ -190,7 +211,7 @@ static func _draw_bar(image: Image, origin: Vector2i, species: PlantSpecies, par
 				else Rect2i(rect.position.x, rect.end.y - 1, rect.size.x, 1)
 		image.fill_rect(Rect2i(edge.position - origin, edge.size), color.darkened(0.3))
 
-	if _creeping(species) and part.kind == PlantPart.Kind.STEM and part.direction.y != 0 and part.run != Vector2i.ZERO:
+	if _creeping(species) and part.kind == PlantPart.Kind.STEM and part.fillet and part.run != Vector2i.ZERO:
 		# The wall is ahead when climbing and behind when dropping; the curve faces away from it.
 		var away := -part.run.x if part.direction == Vector2i.UP else part.run.x
 		var foot := roundi(part.start.y if part.direction == Vector2i.UP else part.end.y) + width / 2

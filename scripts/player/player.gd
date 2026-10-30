@@ -48,6 +48,7 @@ var _pulled_time := 0.0
 
 
 func _ready() -> void:
+	_sprite.material = SunShade.lit_material()
 	global_position = world.spawn_position()
 	for id in STARTING_TIDBITS:
 		inventory.add_tidbits(id, STARTING_TIDBITS[id])

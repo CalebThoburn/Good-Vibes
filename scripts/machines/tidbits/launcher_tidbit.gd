@@ -1,8 +1,8 @@
 extends TidbitType
-## Fires what it holds (blocks or whole machines, delivered by pipe) the way it faces when
-## a signal reaches its port. Its barrel needs a clear path to the edge of the grid. With
-## string attached it fires a grapple instead, which holds on while the signal keeps
-## coming. With nothing to fire, it blows air for as long as the signal lasts.
+## Fires what it holds (blocks or whole machines, loaded on the workbench or by pipe) the
+## way it faces when a signal reaches its port. Its barrel needs a clear path to the edge
+## of the grid. With string attached it fires a grapple instead, which holds on while the
+## signal keeps coming. With nothing to fire, it blows air for as long as the signal lasts.
 
 const POWER := 0
 

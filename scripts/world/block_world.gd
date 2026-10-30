@@ -19,6 +19,10 @@ const PLANT_LAYER := 8
 @export var dirt_depth := 5
 ## Adds a small pillar-and-slab structure next to spawn for trying out collapses.
 @export var build_test_structure := true
+## Lanterns on handles left lying around at the start, as blocks across from spawn.
+@export var starting_lanterns: Array[int] = [-14, 22, -40, 55]
+## Wood each starting lantern holds.
+@export var lantern_wood := 4
 
 var terrain: BlockGrid
 var flora: Flora
@@ -49,10 +53,10 @@ func _ready() -> void:
 
 	flora = Flora.new()
 	flora.name = "Flora"
-	flora.z_index = -1 # Plants grow behind the blocks; anything overlapping a block is hidden by it.
 	flora.world = self
 	add_child(flora)
 	flora.populate(world_seed)
+	_place_lanterns()
 
 
 func surface_y(x: int) -> int:
@@ -160,6 +164,17 @@ func _generate() -> void:
 
 	if build_test_structure:
 		_build_test_structure(width / 2 + 8)
+
+
+## Lanterns on handles, stocked with a little wood, dropped onto the ground near spawn.
+func _place_lanterns() -> void:
+	for offset in starting_lanterns:
+		var x := width / 2 + offset
+		var design := MachineDesign.new()
+		design.place(Vector2i(1, 2), Tidbits.get_type(&"handle"))
+		design.place(Vector2i(1, 1), Tidbits.get_type(&"lantern"))
+		design.store(Vector2i(1, 1), &"wood", lantern_wood)
+		spawn_machine(design, terrain.to_global(Vector2(x + 0.5, surface_y(x) - 1.5) * BlockGrid.CELL_SIZE))
 
 
 ## A two-wide stone pillar holding up a slab. Mine through the pillar to drop it.

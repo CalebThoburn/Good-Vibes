@@ -8,6 +8,7 @@
 size = Vector2(11, 26)
 
 [node name="Player" type="CharacterBody2D"]
+z_index = -2
 collision_layer = 2
 collision_mask = 5
 script = ExtResource("1_player")
@@ -42,14 +43,6 @@ script = ExtResource("2_cursor")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 layer = 3
-
-[node name="Label" type="Label" parent="HUD"]
-offset_left = 12.0
-offset_top = 8.0
-offset_right = 600.0
-offset_bottom = 60.0
-text = "A/D move   Space jump (also off walls)   P workbench
-Q / E / Space triggers   LMB pick up placed machine   Hold T: fast-forward time"
 
 [node name="Message" type="Label" parent="HUD"]
 anchors_preset = 7
