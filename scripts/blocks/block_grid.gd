@@ -101,6 +101,19 @@ func remove_block(cell: Vector2i) -> int:
 	return numeric_id
 
 
+## Breaks one block loose into a body of its own, then lets anything it was holding
+## up fall. Returns the new body, or null if the block can't come loose (it's missing,
+## part of the world floor, or already the only block in its body).
+func detach_block(cell: Vector2i) -> BlockBody:
+	if not cells.has(cell) or (anchored and cell.y >= anchor_row) or (not anchored and cells.size() == 1):
+		return null
+	var blocks: Dictionary[Vector2i, int] = {cell: cells[cell]}
+	var source := get_parent() as RigidBody2D
+	var xform := global_transform
+	remove_block(cell)
+	return world.spawn_body(blocks, xform, source)
+
+
 func _erase_block(cell: Vector2i) -> void:
 	if cells.erase(cell):
 		_tiles.erase_cell(cell)

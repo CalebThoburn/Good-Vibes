@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TidbitType" format=3]
+
+[ext_resource type="Script" path="res://scripts/machines/tidbits/nand_tidbit.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"nand"
+display_name = "NAND Gate"
+description = "Two inputs (left), two outputs (right). Both outputs are on unless both inputs got a signal last tick. With nothing wired in, it's on."
+color = Color(0.25, 0.42, 0.3, 1)
+ports = Array[Vector2]([Vector2(0.12, 0.28), Vector2(0.12, 0.72), Vector2(0.88, 0.28), Vector2(0.88, 0.72)])

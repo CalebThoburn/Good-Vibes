@@ -2,11 +2,15 @@ class_name Player
 extends CharacterBody2D
 ## The player can't touch blocks directly; everything goes through machines.
 
-const STARTING_TIDBITS: Dictionary[StringName, int] = {&"handle": 4, &"trigger": 8, &"launcher": 8, &"flip_flop": 6}
+const STARTING_TIDBITS: Dictionary[StringName, int] = {&"handle": 4, &"trigger": 8, &"launcher": 8, &"flip_flop": 6, &"drill": 4, &"vacuum": 4, &"power": 4, &"nand": 6}
 const STARTING_ITEMS: Dictionary[StringName, int] = {&"string": 12}
 const MESSAGE_TIME := 2.5
 ## How long after being pulled the player keeps air control instead of ground grip.
 const PULLED_GRIP_DELAY := 0.15
+## Input actions for each Machine.Channel, in order.
+const TRIGGER_ACTIONS: Array[StringName] = [&"trigger_q", &"trigger_e", &"trigger_space"]
+## How close a wall has to be to jump off it.
+const WALL_JUMP_REACH := 2.0
 
 @export var world: BlockWorld
 ## Used when ropes and other machines pull on the player.
@@ -18,6 +22,10 @@ const PULLED_GRIP_DELAY := 0.15
 ## Lower than on the ground so swings and pulls keep their momentum.
 @export var air_acceleration := 400.0
 @export var jump_velocity := 270.0
+## Added to (not set as) the upward speed when jumping off a wall.
+@export var wall_jump_velocity := 230.0
+## Horizontal push away from the wall.
+@export var wall_jump_push := 160.0
 ## Impulse applied to loose blocks the player walks into.
 @export var push_impulse := 20.0
 
@@ -59,8 +67,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed(&"activate"):
-		_activate_machines()
+	for channel in TRIGGER_ACTIONS.size():
+		if event.is_action_pressed(TRIGGER_ACTIONS[channel]):
+			_activate_machines(channel)
 
 
 ## Pushes the player like a rigid body of `mass`. While being pushed, ground grip is
@@ -98,8 +107,8 @@ func drop_machine(design: MachineDesign, global_point: Vector2) -> void:
 func _move(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y += _gravity * delta
-	if Input.is_action_just_pressed(&"jump") and is_on_floor():
-		velocity.y = -jump_velocity
+	if Input.is_action_just_pressed(&"jump"):
+		_jump()
 	elif Input.is_action_just_released(&"jump") and velocity.y < 0.0:
 		velocity.y *= 0.5 # Short hop.
 
@@ -114,6 +123,27 @@ func _move(delta: float) -> void:
 		var body := collision.get_collider() as RigidBody2D
 		if body:
 			body.apply_impulse(-collision.get_normal() * push_impulse, collision.get_position() - body.global_position)
+
+
+func _jump() -> void:
+	if is_on_floor():
+		velocity.y = -jump_velocity
+		return
+	var wall_normal := _wall_normal()
+	if wall_normal != Vector2.ZERO:
+		# Adds rather than sets, so a fast fall isn't cancelled outright.
+		velocity.y -= wall_jump_velocity
+		velocity.x += wall_normal.x * wall_jump_push
+		_pulled_time = PULLED_GRIP_DELAY # Don't let air control eat the push at once.
+
+
+## The normal of a wall right beside the player, or ZERO if there's none.
+func _wall_normal() -> Vector2:
+	for side: Vector2 in [Vector2.LEFT, Vector2.RIGHT]:
+		var collision := KinematicCollision2D.new()
+		if test_move(global_transform, side * WALL_JUMP_REACH, collision) and absf(collision.get_normal().x) > 0.7:
+			return collision.get_normal()
+	return Vector2.ZERO
 
 
 ## Highlights a placed machine under the cursor; the pick-up button grabs it.
@@ -133,13 +163,13 @@ func _interact() -> void:
 			notify("No free machine slots")
 
 
-## Q activates the equipped machine and any placed machine under the cursor.
-func _activate_machines() -> void:
+## A trigger key activates the equipped machine and any placed machine under the cursor.
+func _activate_machines(channel: Machine.Channel) -> void:
 	if _held.view.machine:
-		_held.view.machine.activate()
+		_held.view.machine.activate(channel)
 	var hovered := world.machine_at(get_global_mouse_position())
 	if hovered:
-		hovered.view.machine.activate()
+		hovered.view.machine.activate(channel)
 
 
 func _on_inventory_changed() -> void:

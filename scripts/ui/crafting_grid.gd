@@ -1,8 +1,11 @@
 class_name CraftingGrid
 extends Control
-## The workbench grid. Drag tidbits in and around, R rotates the hovered tidbit, and
+## The workbench grid. Drag tidbits in and around, R rotates the hovered tidbit (or
+## switches its setting, for tidbits like triggers), and
 ## right-clicking two ports (or two valves) links them. Linking them again unlinks them.
-## Items dropped on a tidbit attach to it; drag an item's badge to move it off again.
+## Items dropped on a tidbit attach to it as upgrades. Badges show attached upgrades and,
+## tinted, whatever the tidbit holds; drag a badge to take it off again. Held things
+## can only be taken out here: they get in by pipe or suction.
 
 const CELL := 56.0
 const CONNECTOR_PICK_RADIUS := 10.0
@@ -53,7 +56,7 @@ func _gui_input(event: InputEvent) -> void:
 func _input(event: InputEvent) -> void:
 	# Rotating works by hovering, without the grid needing focus.
 	if event.is_action_pressed(&"rotate") and is_visible_in_tree() and design.tidbits.has(_hover_cell):
-		inventory.rotate_tidbit(_hover_cell)
+		inventory.turn_tidbit(_hover_cell)
 		get_viewport().set_input_as_handled()
 
 
@@ -73,6 +76,14 @@ func _get_tooltip(at_position: Vector2) -> String:
 	var lines := PackedStringArray([type.display_name, type.description])
 	for item_id: StringName in design.items_on(cell):
 		lines.append("%s ×%d" % [Items.get_type(item_id).display_name, design.item_count(cell, item_id)])
+	if type.storage > 0:
+		var held := PackedStringArray()
+		for item_id: StringName in design.stored_on(cell):
+			held.append("%s ×%d" % [Items.get_type(item_id).display_name, design.stored_count(cell, item_id)])
+		if not design.machines_in(cell).is_empty():
+			held.append("Machine ×%d" % design.machines_in(cell).size())
+		lines.append("Holds (%d/%d): %s" % [type.storage - design.store_room(cell), type.storage,
+				", ".join(held) if held else "nothing"])
 	var status := type.get_status(design, cell)
 	if status:
 		lines.append(status)
@@ -83,16 +94,22 @@ func _get_tooltip(at_position: Vector2) -> String:
 
 
 func _get_drag_data(at_position: Vector2) -> Variant:
-	var badge := _item_badge_at(at_position)
-	if not badge.is_empty():
-		return ItemSlot.drag_item(self, Items.get_type(badge[1]), design.item_count(badge[0], badge[1]), badge[0])
 	var cell := _cell_at(at_position)
+	var badge := _badge_at(at_position)
+	match badge.get("kind"):
+		&"attached":
+			return ItemSlot.drag_item(self, Items.get_type(badge.id), design.item_count(cell, badge.id), cell)
+		&"stored":
+			return ItemSlot.drag_item(self, Items.get_type(badge.id), design.stored_count(cell, badge.id), cell, true)
+		&"machine":
+			return MachineSlot.drag_machine(self, badge.machine, cell)
 	var type := design.get_tidbit(cell)
 	if type == null:
 		return null
 	var rotation_steps := design.get_rotation(cell)
+	var setting := design.get_setting(cell)
 	set_drag_preview(MachineDrawer.make_preview(Vector2.ONE * CELL, func(canvas: Control) -> void:
-		type.draw(canvas, Rect2(Vector2.ZERO, canvas.size), rotation_steps)))
+		type.draw(canvas, Rect2(Vector2.ZERO, canvas.size), rotation_steps, setting)))
 	return {kind = &"tidbit", type = type, from_cell = cell}
 
 
@@ -104,9 +121,10 @@ func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 		&"tidbit":
 			return cell != MachineDesign.NO_CELL and not design.tidbits.has(cell)
 		&"machine":
-			return design.is_empty()
+			return design.is_empty() and not data.has("from_cell")
 		&"item":
-			return cell != data.get("from_cell") and design.item_room(cell, data.item.id) > 0
+			return not data.get("stored", false) and cell != data.get("from_cell") \
+					and design.item_room(cell, data.item.id) > 0
 	return false
 
 
@@ -146,14 +164,14 @@ func _connector_at(at_position: Vector2) -> Array:
 	return []
 
 
-## [cell, item id] of the item badge under a point, or [] if there is none.
-func _item_badge_at(at_position: Vector2) -> Array:
+## The badge (see MachineDrawer.badges) under a point, or {} if there is none.
+func _badge_at(at_position: Vector2) -> Dictionary:
 	var cell := _cell_at(at_position)
-	var attached := design.items_on(cell)
-	for i in attached.size():
-		if MachineDrawer.item_badge_rect(cell, i, Vector2.ZERO, CELL).has_point(at_position):
-			return [cell, attached.keys()[i]]
-	return []
+	var all := MachineDrawer.badges(design, cell)
+	for i in all.size():
+		if MachineDrawer.badge_rect(cell, i, Vector2.ZERO, CELL).has_point(at_position):
+			return all[i]
+	return {}
 
 
 func _cell_at(at_position: Vector2) -> Vector2i:

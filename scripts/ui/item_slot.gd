@@ -1,7 +1,8 @@
 class_name ItemSlot
 extends Control
 ## One kind of item in the inventory. Drag it onto a workbench tidbit to attach it, or
-## drop attached items here to take them off. Dragging moves one; hold Shift for all.
+## drop items from workbench tidbits here to take them out. Dragging moves one; hold
+## Shift for all.
 
 const SIZE := 52.0
 
@@ -10,8 +11,9 @@ var type: ItemType
 
 
 ## Starts dragging items: one, or all `available` with Shift held. Leave `from_cell`
-## as NO_CELL when they come from the inventory rather than a workbench tidbit.
-static func drag_item(source: Control, item: ItemType, available: int, from_cell := MachineDesign.NO_CELL) -> Variant:
+## as NO_CELL when they come from the inventory rather than a workbench tidbit; set
+## `stored` when they're held by the tidbit rather than attached to it.
+static func drag_item(source: Control, item: ItemType, available: int, from_cell := MachineDesign.NO_CELL, stored := false) -> Variant:
 	if available <= 0:
 		return null
 	var amount := available if Input.is_key_pressed(KEY_SHIFT) else 1
@@ -20,6 +22,7 @@ static func drag_item(source: Control, item: ItemType, available: int, from_cell
 	var data := {kind = &"item", item = item, amount = amount}
 	if from_cell != MachineDesign.NO_CELL:
 		data.from_cell = from_cell
+		data.stored = stored
 	return data
 
 
@@ -52,4 +55,7 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
-	inventory.detach_item(data.from_cell, data.item.id, data.amount)
+	if data.stored:
+		inventory.unstore_item(data.from_cell, data.item.id, data.amount)
+	else:
+		inventory.detach_item(data.from_cell, data.item.id, data.amount)

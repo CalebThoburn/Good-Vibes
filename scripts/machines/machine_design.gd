@@ -14,10 +14,16 @@ const DIRECTIONS: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEF
 
 @export var tidbits: Dictionary[Vector2i, TidbitType] = {}
 @export var rotations: Dictionary[Vector2i, int] = {}
-## Items attached to each tidbit: cell -> {item id: count}.
+## Which of its settings (TidbitType.settings) each tidbit uses.
+@export var settings: Dictionary[Vector2i, int] = {}
+## Upgrades attached to each tidbit on the workbench: cell -> {item id: count}.
 @export var items: Dictionary[Vector2i, Dictionary] = {}
+## What each tidbit holds, filled by pipes and suction: cell -> {item id: count}.
+@export var stored: Dictionary[Vector2i, Dictionary] = {}
+## Whole machines each tidbit holds: cell -> [MachineDesign, ...].
+@export var stored_machines: Dictionary[Vector2i, Array] = {}
 ## Linked connectors in pairs [a0, b0, a1, b1, ...]. A connector is
-## Vector3i(cell.x, cell.y, port or valve index).
+## Vector3i(cell.x, cell.y, port or valve index), and has at most one link.
 @export var wires: Array[Vector3i] = []
 @export var pipes: Array[Vector3i] = []
 
@@ -54,12 +60,17 @@ func cells_to_edge(cell: Vector2i, direction: Vector2i) -> int:
 	return steps
 
 
-## Whether no tidbit sits between a cell and the edge of the grid in a direction.
-func is_clear_to_edge(cell: Vector2i, direction: Vector2i) -> bool:
+## The nearest tidbit from a cell toward the edge of the grid, or NO_CELL.
+func first_tidbit_toward(cell: Vector2i, direction: Vector2i) -> Vector2i:
 	for step in range(1, cells_to_edge(cell, direction) + 1):
 		if tidbits.has(cell + direction * step):
-			return false
-	return true
+			return cell + direction * step
+	return NO_CELL
+
+
+## Whether no tidbit sits between a cell and the edge of the grid in a direction.
+func is_clear_to_edge(cell: Vector2i, direction: Vector2i) -> bool:
+	return first_tidbit_toward(cell, direction) == NO_CELL
 
 
 func can_equip() -> bool:
@@ -81,8 +92,8 @@ func place(cell: Vector2i, type: TidbitType, rotation_steps := 0) -> void:
 func remove(cell: Vector2i) -> TidbitType:
 	var type := get_tidbit(cell)
 	tidbits.erase(cell)
-	rotations.erase(cell)
-	items.erase(cell)
+	for table: Dictionary in [rotations, settings, items, stored, stored_machines]:
+		table.erase(cell)
 	for list: Array[Vector3i] in [wires, pipes]:
 		var i := list.size() - 2
 		while i >= 0:
@@ -95,12 +106,12 @@ func remove(cell: Vector2i) -> TidbitType:
 
 ## Moves a tidbit to an empty cell, keeping its links.
 func move(from: Vector2i, to: Vector2i) -> void:
-	place(to, tidbits[from], get_rotation(from))
-	if items.has(from):
-		items[to] = items[from]
+	tidbits[to] = tidbits[from]
 	tidbits.erase(from)
-	rotations.erase(from)
-	items.erase(from)
+	for table: Dictionary in [rotations, settings, items, stored, stored_machines]:
+		if table.has(from):
+			table[to] = table[from]
+			table.erase(from)
 	for list: Array[Vector3i] in [wires, pipes]:
 		for i in list.size():
 			if _cell_of(list[i]) == from:
@@ -111,13 +122,21 @@ func rotate(cell: Vector2i) -> void:
 	rotations[cell] = (get_rotation(cell) + 1) % DIRECTIONS.size()
 
 
+func get_setting(cell: Vector2i) -> int:
+	return settings.get(cell, 0)
+
+
+func cycle_setting(cell: Vector2i) -> void:
+	settings[cell] = (get_setting(cell) + 1) % get_tidbit(cell).settings.size()
+
+
 ## Items attached to a tidbit, as {item id: count}. Don't modify the result.
 func items_on(cell: Vector2i) -> Dictionary:
 	return items.get(cell, {})
 
 
 func item_count(cell: Vector2i, item_id: StringName) -> int:
-	return items_on(cell).get(item_id, 0)
+	return _count(items, cell, item_id)
 
 
 ## How many more of an item a tidbit can take.
@@ -127,19 +146,62 @@ func item_room(cell: Vector2i, item_id: StringName) -> int:
 
 
 func add_item(cell: Vector2i, item_id: StringName, amount: int) -> void:
-	if not items.has(cell):
-		items[cell] = {}
-	items[cell][item_id] = item_count(cell, item_id) + amount
+	_add(items, cell, item_id, amount)
 
 
 func remove_item(cell: Vector2i, item_id: StringName, amount: int) -> void:
-	var left := item_count(cell, item_id) - amount
-	if left > 0:
-		items[cell][item_id] = left
-		return
-	items_on(cell).erase(item_id)
-	if items_on(cell).is_empty():
-		items.erase(cell)
+	_remove(items, cell, item_id, amount)
+
+
+## Items a tidbit holds, as {item id: count}. Don't modify the result.
+func stored_on(cell: Vector2i) -> Dictionary:
+	return stored.get(cell, {})
+
+
+func stored_count(cell: Vector2i, item_id: StringName) -> int:
+	return _count(stored, cell, item_id)
+
+
+## Machines a tidbit holds. Don't modify the result.
+func machines_in(cell: Vector2i) -> Array:
+	return stored_machines.get(cell, [])
+
+
+## Everything a tidbit holds, one entry per kind: item ids, then MachineDesigns.
+func stored_things(cell: Vector2i) -> Array:
+	return stored_on(cell).keys() + machines_in(cell)
+
+
+## How many more things (items or machines) a tidbit can hold.
+func store_room(cell: Vector2i) -> int:
+	var type := get_tidbit(cell)
+	if type == null:
+		return 0
+	var total := machines_in(cell).size()
+	for count: int in stored_on(cell).values():
+		total += count
+	return type.storage - total
+
+
+## Adds one thing (an item id or a MachineDesign) to what a tidbit holds.
+func store(cell: Vector2i, thing: Variant, amount := 1) -> void:
+	if thing is MachineDesign:
+		if not stored_machines.has(cell):
+			stored_machines[cell] = []
+		stored_machines[cell].append(thing)
+		emit_changed()
+	else:
+		_add(stored, cell, thing, amount)
+
+
+func unstore(cell: Vector2i, thing: Variant, amount := 1) -> void:
+	if thing is MachineDesign:
+		machines_in(cell).erase(thing)
+		if machines_in(cell).is_empty():
+			stored_machines.erase(cell)
+		emit_changed()
+	else:
+		_remove(stored, cell, thing, amount)
 
 
 func links(kind: Link) -> Array[Vector3i]:
@@ -174,18 +236,44 @@ func linked(kind: Link, connector: Vector3i) -> Array[Vector3i]:
 	return result
 
 
-## Links two connectors, or unlinks them if they already are.
+## Links two connectors, or unlinks them if they already are. Each connector takes one
+## link, so linking replaces any link either end already had.
 func toggle_link(kind: Link, a: Vector3i, b: Vector3i) -> void:
 	if a == b:
 		return
+	var already_linked := linked(kind, a).has(b)
 	var list := links(kind)
-	for i in range(0, list.size(), 2):
-		if (list[i] == a and list[i + 1] == b) or (list[i] == b and list[i + 1] == a):
+	var i := list.size() - 2
+	while i >= 0:
+		if list[i] in [a, b] or list[i + 1] in [a, b]:
 			list.remove_at(i + 1)
 			list.remove_at(i)
-			return
-	list.append(a)
-	list.append(b)
+		i -= 2
+	if not already_linked:
+		list.append(a)
+		list.append(b)
+
+
+func _count(table: Dictionary, cell: Vector2i, item_id: StringName) -> int:
+	return table.get(cell, {}).get(item_id, 0)
+
+
+func _add(table: Dictionary, cell: Vector2i, item_id: StringName, amount: int) -> void:
+	if not table.has(cell):
+		table[cell] = {}
+	table[cell][item_id] = _count(table, cell, item_id) + amount
+	emit_changed()
+
+
+func _remove(table: Dictionary, cell: Vector2i, item_id: StringName, amount: int) -> void:
+	var left := _count(table, cell, item_id) - amount
+	if left > 0:
+		table[cell][item_id] = left
+	elif table.has(cell):
+		table[cell].erase(item_id)
+		if table[cell].is_empty():
+			table.erase(cell)
+	emit_changed()
 
 
 func _layout(kind: Link, type: TidbitType) -> Array[Vector2]:

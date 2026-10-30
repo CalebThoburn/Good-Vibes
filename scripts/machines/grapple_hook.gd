@@ -39,6 +39,7 @@ func _init(p_machine: Machine, p_cell: Vector2i, p_direction: Vector2i, p_max_le
 	cell = p_cell
 	direction = p_direction
 	max_length = p_max_length
+	last_signal_tick = machine.tick_count
 	top_level = true
 	z_index = 1
 
@@ -91,9 +92,9 @@ func _fly(delta: float) -> void:
 			BlockWorld.BLOCK_LAYER | BlockWorld.PLAYER_LAYER | BlockWorld.MACHINE_LAYER, machine.self_colliders)
 	query.collide_with_areas = true # Held machines are areas.
 	var hit := get_world_2d().direct_space_state.intersect_ray(query)
-	if not hit.is_empty() and _body_of(hit.collider):
+	if not hit.is_empty() and MachinePhysics.body_of(hit.collider):
 		_target = hit.collider
-		_target_body = _body_of(hit.collider)
+		_target_body = MachinePhysics.body_of(hit.collider)
 		_target_point = _target.to_local(hit.position)
 		_length = _anchor().distance_to(hit.position)
 		_state = State.HOOKED
@@ -117,52 +118,16 @@ func _reel(delta: float) -> void:
 
 	# Find the impulse that makes the ends close the stretch, shared by inverse mass.
 	var holder := machine.holder
-	var inverse_a := _inverse_mass(holder)
-	var inverse_b := _inverse_mass(_target_body)
+	var inverse_a := MachinePhysics.inverse_mass(holder)
+	var inverse_b := MachinePhysics.inverse_mass(_target_body)
 	if inverse_a + inverse_b == 0.0:
 		return
 	var normal := (b - a) / distance
 	var closing_speed := minf((distance - _length) * STIFFNESS / delta, MAX_CORRECTION_SPEED)
-	var relative_speed := (_velocity_of(_target_body) - _velocity_of(holder)).dot(normal)
+	var relative_speed := (MachinePhysics.velocity_of(_target_body) - MachinePhysics.velocity_of(holder)).dot(normal)
 	var impulse := (-closing_speed - relative_speed) / (inverse_a + inverse_b)
 	if impulse >= 0.0:
 		return
-	_apply_impulse(_target_body, normal * impulse, b)
-	_apply_impulse(holder, -normal * impulse, a)
+	MachinePhysics.apply_impulse(_target_body, normal * impulse, b)
+	MachinePhysics.apply_impulse(holder, -normal * impulse, a)
 
-
-## The body to pull for a hooked collider: itself, or a held machine's holder. Null for
-## anything that can't be pulled.
-static func _body_of(collider: Object) -> PhysicsBody2D:
-	if collider is PhysicsBody2D:
-		return collider
-	if collider is Area2D and collider.get_parent() is MachineView:
-		var held: Machine = collider.get_parent().machine
-		return held.holder if held else null
-	return null
-
-
-## Zero for things that don't move (terrain). Characters need a `mass` property.
-static func _inverse_mass(body: PhysicsBody2D) -> float:
-	if body is RigidBody2D and not body.freeze:
-		return 1.0 / body.mass
-	if body is CharacterBody2D and "mass" in body:
-		return 1.0 / body.mass
-	return 0.0
-
-
-static func _velocity_of(body: PhysicsBody2D) -> Vector2:
-	if body is RigidBody2D:
-		return body.linear_velocity
-	if body is CharacterBody2D:
-		return body.velocity
-	return Vector2.ZERO
-
-
-static func _apply_impulse(body: PhysicsBody2D, impulse: Vector2, global_point: Vector2) -> void:
-	if body is RigidBody2D:
-		body.apply_impulse(impulse, global_point - body.global_position)
-	elif body.has_method(&"apply_impulse"):
-		body.apply_impulse(impulse)
-	elif body is CharacterBody2D:
-		body.velocity += impulse * _inverse_mass(body)

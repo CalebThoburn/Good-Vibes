@@ -17,6 +17,10 @@ func _enter_tree() -> void:
 	_build_tile_set()
 
 
+func all() -> Array[BlockType]:
+	return _types.slice(1)
+
+
 func get_type(numeric_id: int) -> BlockType:
 	return _types[numeric_id]
 

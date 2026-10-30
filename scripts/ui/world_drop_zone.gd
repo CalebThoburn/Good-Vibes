@@ -6,7 +6,7 @@ var player: Player
 
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-	return data is Dictionary and data.get("kind") == &"machine"
+	return data is Dictionary and data.get("kind") == &"machine" and not data.has("from_cell")
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:

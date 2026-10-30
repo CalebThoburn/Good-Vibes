@@ -6,6 +6,7 @@
 script = ExtResource("1_script")
 id = &"trigger"
 display_name = "Trigger"
-description = "Sends a signal out its port when you press Q while holding the machine or hovering over it."
+description = "Sends a signal out its port when you press its key while holding the machine or hovering over it. R switches the key between Q, E and Space."
 color = Color(0.78, 0.22, 0.2, 1)
 ports = Array[Vector2]([Vector2(0.85, 0.5)])
+settings = PackedStringArray("Q", "E", "Space")

@@ -3,7 +3,7 @@ extends Control
 ## One kind of tidbit in the inventory. Drag it onto the workbench, or drop workbench
 ## tidbits here to put them away.
 
-const SIZE := 52.0
+const SIZE := 44.0
 
 var inventory: Inventory
 var type: TidbitType

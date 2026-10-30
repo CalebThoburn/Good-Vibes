@@ -30,7 +30,7 @@ func _ready() -> void:
 		slot.index = i
 		_machines.add_child(slot)
 	%Build.pressed.connect(_on_build_pressed)
-	%Clear.pressed.connect(inventory.clear_workbench)
+	%Clear.pressed.connect(_on_clear_pressed)
 	_set_open(false)
 
 
@@ -54,3 +54,8 @@ func _on_build_pressed() -> void:
 		player.notify("Put some tidbits on the workbench first")
 	elif not inventory.build():
 		player.notify("No free machine slots")
+
+
+func _on_clear_pressed() -> void:
+	if not player.inventory.clear_workbench():
+		player.notify("No free machine slots for the machines some tidbits hold")

@@ -43,14 +43,22 @@ func place_tidbit(cell: Vector2i, type: TidbitType) -> bool:
 	return true
 
 
-## Takes a tidbit off the workbench and back into the inventory, with its items.
-func return_tidbit(cell: Vector2i) -> void:
-	var attached := workbench.items_on(cell).duplicate()
+## Takes a tidbit off the workbench and back into the inventory, with everything
+## attached to it or held by it. Fails if the machines it holds won't fit.
+func return_tidbit(cell: Vector2i) -> bool:
+	var held_machines := workbench.machines_in(cell).duplicate()
+	if machines.size() + held_machines.size() > MACHINE_SLOTS:
+		return false
+	var contents: Array[Dictionary] = [workbench.items_on(cell).duplicate(), workbench.stored_on(cell).duplicate()]
 	var type := workbench.remove(cell)
 	if type:
-		add_tidbits(type.id)
-	for item_id: StringName in attached:
-		add_items(item_id, attached[item_id])
+		tidbits[type.id] = count_of(type.id) + 1
+	for counts in contents:
+		for item_id: StringName in counts:
+			items[item_id] = item_count(item_id) + counts[item_id]
+	machines.append_array(held_machines)
+	changed.emit()
+	return true
 
 
 ## Attaches up to `amount` of an item to a workbench tidbit. Returns how many it attached.
@@ -73,6 +81,23 @@ func detach_item(cell: Vector2i, item_id: StringName, amount: int) -> void:
 	add_items(item_id, amount)
 
 
+## Takes up to `amount` of an item a workbench tidbit holds into the inventory.
+func unstore_item(cell: Vector2i, item_id: StringName, amount: int) -> void:
+	amount = mini(amount, workbench.stored_count(cell, item_id))
+	if amount <= 0:
+		return
+	workbench.unstore(cell, item_id, amount)
+	add_items(item_id, amount)
+
+
+## Takes a machine a workbench tidbit holds into the machine bar, if there's room.
+func unstore_machine(cell: Vector2i, machine: MachineDesign) -> bool:
+	if not workbench.machines_in(cell).has(machine) or not add_machine(machine):
+		return false
+	workbench.unstore(cell, machine)
+	return true
+
+
 func move_tidbit(from: Vector2i, to: Vector2i) -> bool:
 	if from == to or not MachineDesign.contains(to) or workbench.tidbits.has(to):
 		return false
@@ -81,8 +106,12 @@ func move_tidbit(from: Vector2i, to: Vector2i) -> bool:
 	return true
 
 
-func rotate_tidbit(cell: Vector2i) -> void:
-	workbench.rotate(cell)
+## Rotates a workbench tidbit, or switches its setting if it has settings.
+func turn_tidbit(cell: Vector2i) -> void:
+	if workbench.get_tidbit(cell).settings.is_empty():
+		workbench.rotate(cell)
+	else:
+		workbench.cycle_setting(cell)
 	changed.emit()
 
 
@@ -91,9 +120,12 @@ func toggle_link(kind: MachineDesign.Link, a: Vector3i, b: Vector3i) -> void:
 	changed.emit()
 
 
-func clear_workbench() -> void:
+## Returns every tidbit to the inventory. False if some held machines didn't fit.
+func clear_workbench() -> bool:
+	var all_returned := true
 	for cell in workbench.tidbits.keys():
-		return_tidbit(cell)
+		all_returned = return_tidbit(cell) and all_returned
+	return all_returned
 
 
 ## Turns the workbench design into a finished machine.
