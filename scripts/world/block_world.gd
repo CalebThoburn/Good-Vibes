@@ -1,13 +1,15 @@
 class_name BlockWorld
 extends Node2D
-## Owns the static terrain grid, every loose BlockBody and placed MachineBody, and the
-## plants (Flora), and answers block queries across all of them.
+## Owns the static terrain grid, every loose BlockBody and placed MachineBody, the
+## plants (Flora) and the creatures (Fauna), and answers block queries across them. Loose blocks resting
+## against another mass fuse into it over time (BlockFusion).
 
 const BLOCK_LAYER := 1
 const PLAYER_LAYER := 2
 const MACHINE_LAYER := 4
 ## Plant hitboxes (areas): found by drills, but nothing collides with them.
 const PLANT_LAYER := 8
+const CREATURE_LAYER := 16
 
 @export var width := 256
 @export var height := 128
@@ -26,6 +28,7 @@ const PLANT_LAYER := 8
 
 var terrain: BlockGrid
 var flora: Flora
+var fauna: Fauna
 
 var _bodies: Node2D
 var _surface_noise := FastNoiseLite.new()
@@ -49,14 +52,29 @@ func _ready() -> void:
 	_bodies.name = "Bodies"
 	add_child(_bodies)
 
-	_generate()
+	var fusion := BlockFusion.new()
+	fusion.name = "Fusion"
+	fusion.world = self
+	add_child(fusion)
+
+	_surface_noise.seed = world_seed
+	_surface_noise.frequency = 0.02
+	var loading := SaveGame.exists() # Then SaveGame fills the world in instead.
+	if not loading:
+		_generate()
 
 	flora = Flora.new()
 	flora.name = "Flora"
 	flora.world = self
 	add_child(flora)
-	flora.populate(world_seed)
-	_place_lanterns()
+	fauna = Fauna.new()
+	fauna.name = "Fauna"
+	fauna.world = self
+	add_child(fauna)
+	if not loading:
+		flora.populate(world_seed)
+		fauna.populate(world_seed)
+		_place_lanterns()
 
 
 func surface_y(x: int) -> int:
@@ -99,7 +117,13 @@ func machine_at(global_point: Vector2) -> MachineBody:
 
 
 func can_place_machine(global_point: Vector2) -> bool:
-	return _is_area_free(global_point, Vector2.ONE * MachineDesign.SIZE * MachineDesign.TIDBIT_PIXELS)
+	return is_area_free(global_point, Vector2.ONE * MachineDesign.SIZE * MachineDesign.TIDBIT_PIXELS)
+
+
+## Loose block bodies and placed machines, for saving.
+func loose_bodies() -> Array[Node]:
+	return _bodies.get_children().filter(func(node: Node) -> bool:
+		return (node is BlockBody or node is MachineBody) and not node.is_queued_for_deletion())
 
 
 func spawn_machine(design: MachineDesign, global_point: Vector2) -> MachineBody:
@@ -137,19 +161,17 @@ func spawn_body(blocks: Dictionary[Vector2i, int], grid_transform: Transform2D, 
 
 
 ## Whether an axis-aligned box (shrunk slightly so touching neighbors don't count) is empty.
-func _is_area_free(global_center: Vector2, size: Vector2) -> bool:
+func is_area_free(global_center: Vector2, size: Vector2) -> bool:
 	var shape := RectangleShape2D.new()
 	shape.size = size * 0.9
 	var query := PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
 	query.transform = Transform2D(0.0, global_center)
-	query.collision_mask = BLOCK_LAYER | PLAYER_LAYER | MACHINE_LAYER
+	query.collision_mask = BLOCK_LAYER | PLAYER_LAYER | MACHINE_LAYER | CREATURE_LAYER
 	return get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty()
 
 
 func _generate() -> void:
-	_surface_noise.seed = world_seed
-	_surface_noise.frequency = 0.02
 	var depth_noise := FastNoiseLite.new()
 	depth_noise.seed = world_seed + 1
 	depth_noise.frequency = 0.08

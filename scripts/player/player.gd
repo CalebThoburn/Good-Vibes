@@ -30,21 +30,32 @@ const WALL_JUMP_REACH := 2.0
 ## Impulse applied to loose blocks the player walks into.
 @export var push_impulse := 20.0
 
+@export_group("Dev mode")
+## Flying speed in dev mode, in pixels per second.
+@export var fly_speed := 260.0
+## Seconds between breaks or placements while a button is held in dev mode.
+@export var dev_edit_interval := 0.08
+
 @export_group("Machines")
 ## How far away the player can place and pick up machines, in blocks.
 @export var reach := 6.0
 
 var inventory := Inventory.new()
+## Dev mode (toggled with dev_mode, F1): fly through everything, and break and place blocks.
+var dev_mode := false
 ## Set while a menu is open; stops picking up machines.
 var ui_open := false
 
 var _gravity: float = ProjectSettings.get_setting("physics/2d/default_gravity")
 var _pulled_time := 0.0
+var _dev_block := 0 # Index into Blocks.all() of the block dev mode places.
+var _dev_edit_wait := 0.0
 
 @onready var _cursor: BlockCursor = $BlockCursor
 @onready var _held: HeldMachine = $HeldMachine
 @onready var _message: Label = $HUD/Message
 @onready var _sprite: Control = $Sprite
+@onready var _dev_label: Label = $HUD/DevLabel
 
 
 func _ready() -> void:
@@ -64,7 +75,11 @@ func _process(_delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_move(delta)
+	if dev_mode:
+		_fly()
+		_dev_edit(delta)
+	else:
+		_move(delta)
 	_interact()
 	if global_position.y > world.kill_y():
 		global_position = world.spawn_position()
@@ -72,9 +87,26 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"dev_mode"):
+		_set_dev_mode(not dev_mode)
 	for channel in TRIGGER_ACTIONS.size():
 		if event.is_action_pressed(TRIGGER_ACTIONS[channel]):
 			_activate_machines(channel)
+	if not dev_mode:
+		return
+	var blocks := Blocks.all()
+	if event is InputEventKey and event.pressed and not event.echo:
+		var slot: int = event.keycode - KEY_1
+		if slot >= 0 and slot < blocks.size():
+			_dev_block = slot
+			_update_dev_label()
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_dev_block = posmod(_dev_block - 1, blocks.size())
+			_update_dev_label()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_dev_block = posmod(_dev_block + 1, blocks.size())
+			_update_dev_label()
 
 
 ## Pushes the player like a rigid body of `mass`. While being pushed, ground grip is
@@ -168,6 +200,48 @@ func _interact() -> void:
 			machine.queue_free()
 		else:
 			notify("No free machine slots")
+
+
+func _set_dev_mode(on: bool) -> void:
+	dev_mode = on
+	collision_mask = 0 if on else BlockWorld.BLOCK_LAYER | BlockWorld.MACHINE_LAYER # Through everything.
+	velocity = Vector2.ZERO
+	_dev_label.visible = on
+	_update_dev_label()
+
+
+func _update_dev_label() -> void:
+	_dev_label.text = "DEV MODE (F1)   %s   LMB break  RMB place  wheel/1-%d block  WASD fly" \
+			% [Blocks.all()[_dev_block].display_name, Blocks.all().size()]
+
+
+## Dev mode: flies in any direction, through everything.
+func _fly() -> void:
+	var direction := Vector2(Input.get_axis(&"move_left", &"move_right"), Input.get_axis(&"jump", &"move_down"))
+	velocity = direction.normalized() * fly_speed
+	move_and_slide()
+
+
+## Dev mode: the mouse buttons break whatever block (or plant part) is under the cursor,
+## or place the chosen block. Placed blocks stay put, even floating.
+func _dev_edit(delta: float) -> void:
+	_dev_edit_wait = maxf(_dev_edit_wait - delta, 0.0)
+	if ui_open or _dev_edit_wait > 0.0:
+		return
+	var target := get_global_mouse_position()
+	if Input.is_action_pressed(&"pick_up") and world.machine_at(target) == null:
+		var plant := world.flora.part_at(target)
+		var block := world.block_at(target)
+		if not plant.is_empty():
+			plant.plant.cut(plant.part)
+		elif not block.is_empty():
+			block.grid.remove_block(block.cell)
+		_dev_edit_wait = dev_edit_interval
+	elif Input.is_action_pressed(&"place"):
+		var cell := world.terrain.global_to_cell(target)
+		if not world.terrain.has_block(cell):
+			world.terrain.set_block(cell, Blocks.id_of(Blocks.all()[_dev_block].id))
+			_dev_edit_wait = dev_edit_interval
 
 
 ## A trigger key activates the equipped machine and any placed machine under the cursor.

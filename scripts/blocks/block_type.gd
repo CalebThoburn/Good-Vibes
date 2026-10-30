@@ -10,6 +10,8 @@ extends Resource
 @export var density := 1.0
 ## How hard the block is to break. Not used yet.
 @export var strength := 1.0
+## How richly roots that grow into it feed, for blocks plants take as soil.
+@export var fertility := 1.0
 
 @export_group("Appearance")
 ## Base color of the generated placeholder texture.

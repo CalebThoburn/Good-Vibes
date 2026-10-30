@@ -15,7 +15,7 @@ const SKY_TOPS: Array[Color] = [
 	Color(0.02, 0.01, 0.05), # black
 	Color(0.13, 0.04, 0.27), # deep purple
 	Color(0.42, 0.07, 0.45), # magenta
-	Color(0.78, 0.36, 0.62), # pink
+	Color(0.8, 0.16, 0.44), # pink (a deep rose, between magenta and red)
 	Color(0.72, 0.18, 0.3), # red
 	Color(0.9, 0.48, 0.28), # orange
 	Color(0.96, 0.84, 0.44), # yellow
@@ -26,7 +26,7 @@ const SKY_HORIZONS: Array[Color] = [
 	Color(0.07, 0.03, 0.13),
 	Color(0.27, 0.08, 0.42),
 	Color(0.86, 0.22, 0.62),
-	Color(1.0, 0.62, 0.72),
+	Color(0.97, 0.3, 0.46),
 	Color(0.96, 0.32, 0.27),
 	Color(1.0, 0.66, 0.32),
 	Color(1.0, 0.95, 0.62),
@@ -38,7 +38,7 @@ const WORLD_LIGHT: Array[Color] = [
 	Color(0.3, 0.28, 0.5),
 	Color(0.38, 0.3, 0.58),
 	Color(0.62, 0.4, 0.66),
-	Color(0.86, 0.62, 0.72),
+	Color(0.8, 0.48, 0.6),
 	Color(0.92, 0.62, 0.6),
 	Color(0.98, 0.78, 0.66),
 	Color(1.0, 0.95, 0.82),

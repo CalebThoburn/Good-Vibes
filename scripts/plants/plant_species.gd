@@ -79,7 +79,7 @@ enum Form { TREE, CREEPER }
 ## Nutrients a root draws while its tip is in soil.
 @export var root_uptake := 0.8
 ## Block types roots can grow into and draw from.
-@export var soil: Array[StringName] = [&"dirt"]
+@export var soil: Array[StringName] = [&"dirt", &"dung"]
 ## Upkeep per leaf of leaf_area_size.
 @export var leaf_upkeep := Vector2(0.5, 0.08)
 ## Upkeep per square pixel (length × thickness) of stem, and of root.

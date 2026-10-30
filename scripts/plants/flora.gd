@@ -46,6 +46,7 @@ static func shade_cell(global_point: Vector2) -> Vector2i:
 
 
 func _ready() -> void:
+	world.terrain.changed.connect(_on_terrain_changed) # Plants react straight away.
 	for file in ResourceLoader.list_directory(SPECIES_DIR):
 		if file.ends_with(".tres"):
 			var kind := load(SPECIES_DIR + file) as PlantSpecies
@@ -65,10 +66,9 @@ func _physics_process(delta: float) -> void:
 
 
 ## Scatters young plants of every species over the surface, then lets them grow for
-## prewarm_time. From then on, plants react straight away when the terrain changes.
+## prewarm_time.
 func populate(seed_value: int) -> void:
 	_rng.seed = seed_value
-	world.terrain.changed.connect(_on_terrain_changed)
 	for kind in species.values():
 		var gap: Vector2i = SCATTER_GAPS.get(kind.id, Vector2i(8, 20))
 		var x := _rng.randi_range(3, 10)
@@ -134,6 +134,12 @@ func is_soil(global_point: Vector2, kind: PlantSpecies) -> bool:
 	return _is_soil_cell(_terrain_cell(global_point), kind)
 
 
+## How richly a root at a point feeds (the soil block's fertility), or 0 out of soil.
+func fertility(global_point: Vector2, kind: PlantSpecies) -> float:
+	var cell := _terrain_cell(global_point)
+	return Blocks.get_type(world.terrain.get_block(cell)).fertility if _is_soil_cell(cell, kind) else 0.0
+
+
 ## The plant part at a global point, as {plant, part}, or {} if there's none.
 func part_at(global_point: Vector2) -> Dictionary:
 	var query := PhysicsPointQueryParameters2D.new()
@@ -156,6 +162,24 @@ func spawn_plant(kind: PlantSpecies, cell: Vector2i) -> Plant:
 	plant.setup(kind, self, cell, _rng.randi())
 	plants.append(plant)
 	return plant
+
+
+func to_data() -> Array:
+	return plants.map(func(plant: Plant) -> Dictionary: return plant.to_data())
+
+
+## Replaces every plant with saved ones.
+func load_data(saved: Array) -> void:
+	for plant in plants.duplicate():
+		remove_plant(plant)
+	_to_terrain = world.terrain.global_transform.affine_inverse()
+	for data: Dictionary in saved:
+		if not species.has(data.species):
+			continue
+		var plant := Plant.new()
+		add_child(plant)
+		plant.restore(species[data.species], self, data)
+		plants.append(plant)
 
 
 func remove_plant(plant: Plant) -> void:

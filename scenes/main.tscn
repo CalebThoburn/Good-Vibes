@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/crafting_ui.tscn" id="3_crafting"]
 [ext_resource type="Script" path="res://scripts/sky/sky.gd" id="4_sky"]
 [ext_resource type="Script" path="res://scripts/sky/sun_shade.gd" id="5_shade"]
+[ext_resource type="Script" path="res://scripts/world/save_game.gd" id="6_save"]
 
 [node name="Main" type="Node2D" unique_id=1793267835]
 
@@ -28,3 +29,9 @@ world = NodePath("../World")
 
 [node name="CraftingUI" parent="." unique_id=1260291875 node_paths=PackedStringArray("player") instance=ExtResource("3_crafting")]
 player = NodePath("../Player")
+
+[node name="SaveGame" type="Node" parent="." node_paths=PackedStringArray("world", "player", "sky")]
+script = ExtResource("6_save")
+world = NodePath("../World")
+player = NodePath("../Player")
+sky = NodePath("../Sky")

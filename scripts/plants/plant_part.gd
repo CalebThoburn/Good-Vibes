@@ -71,6 +71,26 @@ func _init(p_kind: Kind, p_parent: PlantPart) -> void:
 	parent = p_parent
 
 
+## The fields that make up a part, for saving.
+const SAVED := [&"kind", &"direction", &"length", &"target_length", &"base_length", &"run", &"fillet",
+		&"thickness", &"offset", &"depth", &"age", &"phase", &"variant", &"size_cap", &"core",
+		&"starvation", &"idle", &"light"]
+
+
+func to_data(parent_index: int) -> Dictionary:
+	var data := {parent = parent_index}
+	for field in SAVED:
+		data[field] = get(field)
+	return data
+
+
+static func from_data(data: Dictionary, p_parent: PlantPart) -> PlantPart:
+	var part := PlantPart.new(data.kind, p_parent)
+	for field in SAVED:
+		part.set(field, data[field])
+	return part
+
+
 ## Breaks the parent/child links between parts so they can be freed (parents and
 ## children refer to each other, which would otherwise keep them alive).
 static func unlink(parts: Array[PlantPart]) -> void:

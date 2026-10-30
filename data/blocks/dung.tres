@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="BlockType" format=3]
+
+[ext_resource type="Script" path="res://scripts/blocks/block_type.gd" id="1_type"]
+
+[resource]
+script = ExtResource("1_type")
+id = &"dung"
+display_name = "Dung"
+density = 0.8
+strength = 0.5
+fertility = 2.5
+color = Color(0.36, 0.3, 0.16, 1)
+texture_noise = 0.16

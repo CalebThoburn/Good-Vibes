@@ -137,6 +137,40 @@ func setup(p_species: PlantSpecies, p_flora: Flora, p_anchor_cell: Vector2i, see
 	_rebuild()
 
 
+func to_data() -> Dictionary:
+	var index: Dictionary[PlantPart, int] = {}
+	var saved := []
+	for part in parts:
+		index[part] = saved.size()
+		saved.append(part.to_data(index.get(part.parent, -1)))
+	return {species = species.id, anchor = anchor_cell, position = position, reserves = reserves, age = age,
+			vigor = _vigor, max_parts = _max_parts, tuft = _tuft, rng = _rng.state, parts = saved}
+
+
+## Rebuilds a saved plant (see to_data).
+func restore(p_species: PlantSpecies, p_flora: Flora, data: Dictionary) -> void:
+	species = p_species
+	flora = p_flora
+	anchor_cell = data.anchor
+	position = data.position
+	reserves = data.reserves
+	age = data.age
+	_vigor = data.vigor
+	_max_parts = data.max_parts
+	_tuft = data.tuft
+	_rng.state = data.rng
+	if _creeping():
+		_wood.z_index = Z_GRASS
+		_leaves[1].z_index = Z_GRASS
+	for saved: Dictionary in data.parts:
+		var parent: PlantPart = parts[saved.parent] if saved.parent >= 0 else null
+		var part := PlantPart.from_data(saved, parent)
+		if parent:
+			parent.children.append(part)
+		parts.append(part)
+	_rebuild()
+
+
 func step(dt: float) -> void:
 	age += dt
 	if not flora.world.terrain.has_block(anchor_cell): # Runners are checked when the terrain changes.
@@ -195,6 +229,24 @@ func cut(part: PlantPart) -> void:
 		return
 	flora.drop_debris(self, _remove_subtree(part))
 	_rebuild()
+
+
+## Bitten off by a grazing creature: the leaf is gone, and nothing falls. A plant is
+## never grazed down to nothing, so it can grow back. Returns how much was eaten, from
+## around 0.5 for a small leaf to 1 for a full-grown one, or 0 if it couldn't be.
+func graze(part: PlantPart) -> float:
+	if part.kind != PlantPart.Kind.LEAF or not parts.has(part) or is_queued_for_deletion():
+		return 0.0
+	var leaves := 0
+	for other in parts:
+		if other.kind == PlantPart.Kind.LEAF:
+			leaves += 1
+	if leaves <= 1:
+		return 0.0
+	var eaten := clampf(PlantRenderer.leaf_size(species, part) / species.max_leaf_size, 0.3, 1.0)
+	PlantPart.unlink(_remove_subtree(part))
+	_rebuild()
+	return eaten
 
 
 ## The plant comes off its anchor: everything above ground falls, the roots crumble.
@@ -328,8 +380,8 @@ func _measure(dt: float) -> void:
 				part.production = Vector2.ZERO
 				part.need = species.wood_upkeep * part.length * part.thickness * dt
 			PlantPart.Kind.ROOT:
-				var in_soil := flora.is_soil(to_global(part.end), species)
-				part.production = Vector2(0.0, species.root_uptake * dt) if in_soil else Vector2.ZERO
+				var fertility := flora.fertility(to_global(part.end), species)
+				part.production = Vector2(0.0, species.root_uptake * fertility * dt)
 				part.need = species.root_upkeep * part.length * part.thickness * dt
 		_supply += part.production
 		_demand += part.need

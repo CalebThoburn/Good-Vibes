@@ -28,6 +28,34 @@ const DIRECTIONS: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEF
 @export var pipes: Array[Vector3i] = []
 
 
+## The design as plain data for saving (tidbits by id, so it survives new tidbit types).
+func to_data() -> Dictionary:
+	var kinds := {}
+	for cell in tidbits:
+		kinds[cell] = tidbits[cell].id
+	var machines := {}
+	for cell in stored_machines:
+		machines[cell] = stored_machines[cell].map(func(machine: MachineDesign) -> Dictionary: return machine.to_data())
+	return {tidbits = kinds, rotations = rotations.duplicate(), settings = settings.duplicate(),
+			items = items.duplicate(true), stored = stored.duplicate(true), stored_machines = machines,
+			wires = wires.duplicate(), pipes = pipes.duplicate()}
+
+
+static func from_data(data: Dictionary) -> MachineDesign:
+	var design := MachineDesign.new()
+	for cell: Vector2i in data.tidbits:
+		design.tidbits[cell] = Tidbits.get_type(data.tidbits[cell])
+	design.rotations.assign(data.rotations)
+	design.settings.assign(data.settings)
+	design.items.assign(data.items)
+	design.stored.assign(data.stored)
+	for cell: Vector2i in data.stored_machines:
+		design.stored_machines[cell] = data.stored_machines[cell].map(func(machine: Dictionary) -> MachineDesign: return from_data(machine))
+	design.wires.assign(data.wires)
+	design.pipes.assign(data.pipes)
+	return design
+
+
 ## Center of a cell in machine space: pixels, with the machine's center at the origin.
 static func cell_position(cell: Vector2i) -> Vector2:
 	return (Vector2(cell) + Vector2(0.5, 0.5) - Vector2.ONE * SIZE * 0.5) * TIDBIT_PIXELS

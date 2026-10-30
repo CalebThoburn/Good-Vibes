@@ -14,6 +14,21 @@ var workbench := MachineDesign.new()
 var equipped: MachineDesign
 
 
+func to_data() -> Dictionary:
+	return {tidbits = tidbits.duplicate(), items = items.duplicate(),
+			machines = machines.map(func(machine: MachineDesign) -> Dictionary: return machine.to_data()),
+			workbench = workbench.to_data(), equipped = machines.find(equipped)}
+
+
+func load_data(data: Dictionary) -> void:
+	tidbits.assign(data.tidbits)
+	items.assign(data.items)
+	machines.assign(data.machines.map(func(machine: Dictionary) -> MachineDesign: return MachineDesign.from_data(machine)))
+	workbench = MachineDesign.from_data(data.workbench)
+	equipped = machines[data.equipped] if data.equipped >= 0 else null
+	changed.emit()
+
+
 func count_of(id: StringName) -> int:
 	return tidbits.get(id, 0)
 
