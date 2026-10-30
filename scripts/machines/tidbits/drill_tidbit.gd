@@ -1,7 +1,8 @@
 extends TidbitType
-## While powered, grinds at the block just past its tip and breaks it loose from whatever
-## it's part of, leaving it as a single loose block. Harder blocks (BlockType.strength)
-## take longer. Its bit needs a clear path to the edge of the grid.
+## While powered, grinds at whatever is just past its tip. A block breaks loose from
+## whatever it's part of, leaving a single loose block; a plant part is cut off, along
+## with everything beyond it. Harder blocks (BlockType.strength) and thicker wood take
+## longer. Its bit needs a clear path to the edge of the grid.
 
 const POWER := 0
 ## How far past the machine's edge the bit reaches, in pixels.
@@ -21,19 +22,31 @@ func on_tick(machine: Machine, cell: Vector2i) -> void:
 	if state.powered_tick != machine.tick_count or not get_problem(machine.design, cell).is_empty():
 		state.progress = 0
 		return
-	var hit := machine.world.block_at(machine.muzzle(cell, machine.design.facing(cell), REACH))
-	if hit.is_empty():
+	var tip := machine.muzzle(cell, machine.design.facing(cell), REACH)
+	var target := []
+	var strength := 0.0
+	var plant_hit := machine.world.flora.part_at(tip)
+	var block_hit := machine.world.block_at(tip) if plant_hit.is_empty() else {}
+	if not plant_hit.is_empty():
+		target = [plant_hit.plant.get_instance_id(), plant_hit.part]
+		strength = plant_hit.part.thickness * plant_hit.plant.species.wood_strength
+	elif not block_hit.is_empty():
+		target = [block_hit.grid.get_instance_id(), block_hit.cell]
+		strength = Blocks.get_type(block_hit.grid.get_block(block_hit.cell)).strength
+	else:
 		state.progress = 0
 		return
-	var grid: BlockGrid = hit.grid
-	var target := [grid.get_instance_id(), hit.cell]
 	if target != state.target:
 		state.target = target
 		state.progress = 0
 	state.progress += 1
-	if state.progress >= ceili(Blocks.get_type(grid.get_block(hit.cell)).strength * ticks_per_strength):
-		grid.detach_block(hit.cell)
-		state.progress = 0
+	if state.progress < ceili(strength * ticks_per_strength):
+		return
+	state.progress = 0
+	if not plant_hit.is_empty():
+		plant_hit.plant.cut(plant_hit.part)
+	else:
+		block_hit.grid.detach_block(block_hit.cell)
 
 
 func get_problem(design: MachineDesign, cell: Vector2i) -> String:

@@ -6,6 +6,6 @@
 script = ExtResource("1_script")
 id = &"drill"
 display_name = "Drill"
-description = "While its port gets a signal, it grinds the block just past its tip and breaks it loose as a single block. Harder blocks take longer. The bit needs a clear path to the edge of the grid."
+description = "While its port gets a signal, it grinds whatever is just past its tip: blocks break loose as single blocks, plant parts are cut off. Harder blocks and thicker wood take longer. The bit needs a clear path to the edge of the grid."
 color = Color(0.62, 0.62, 0.66, 1)
 ports = Array[Vector2]([Vector2(0.12, 0.5)])

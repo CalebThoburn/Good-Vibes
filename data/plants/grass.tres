@@ -1,0 +1,49 @@
+[gd_resource type="Resource" script_class="PlantSpecies" format=3]
+
+[ext_resource type="Script" path="res://scripts/plants/plant_species.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"grass"
+display_name = "Grass"
+form = 1
+max_population = 60
+min_spacing = 40.0
+casts_shade = false
+segment_length = 8.0
+segment_length_variation = 0.25
+initial_length = 0.5
+elongation_rate = 1.5
+min_thickness = 2.0
+thickness_per_leaf = 0.0
+thickening = 0.0
+max_thickness = 2.0
+root_thickness = 1.0
+min_leaf_size = 2.0
+tip_leaf_size = 4.0
+max_leaf_size = 4.0
+leaf_grow_time = 20.0
+leaf_area_size = 4.0
+max_branches = 1
+leaves_per_tip = 2
+max_parts = 140
+photosynthesis = 1.0
+root_uptake = 0.4
+leaf_upkeep = Vector2(0.25, 0.04)
+wood_upkeep = Vector2(0.004, 0.0015)
+reserve_per_part = Vector2(0.6, 0.4)
+sapling_reserves = Vector2(4, 3)
+growth_interval = 2.5
+stem_cost = Vector2(1, 0.4)
+leaf_cost = Vector2(0.6, 0.2)
+root_cost = Vector2(0.8, 0.2)
+maturity = 14
+seed_cost = Vector2(3, 1.5)
+seed_interval = 30.0
+seed_speed = 30.0
+bark_color = Color(0.3, 0.55, 0.2, 1)
+root_color = Color(0.5, 0.45, 0.3, 1)
+leaf_color = Color(0.42, 0.7, 0.26, 1)
+dying_leaf_color = Color(0.7, 0.65, 0.3, 1)
+seed_color = Color(0.6, 0.55, 0.3, 1)
+wood_strength = 1.0

@@ -1,11 +1,13 @@
 class_name BlockWorld
 extends Node2D
-## Owns the static terrain grid, every loose BlockBody and placed MachineBody, and
-## answers block queries across all of them.
+## Owns the static terrain grid, every loose BlockBody and placed MachineBody, and the
+## plants (Flora), and answers block queries across all of them.
 
 const BLOCK_LAYER := 1
 const PLAYER_LAYER := 2
 const MACHINE_LAYER := 4
+## Plant hitboxes (areas): found by drills, but nothing collides with them.
+const PLANT_LAYER := 8
 
 @export var width := 256
 @export var height := 128
@@ -19,6 +21,7 @@ const MACHINE_LAYER := 4
 @export var build_test_structure := true
 
 var terrain: BlockGrid
+var flora: Flora
 
 var _bodies: Node2D
 var _surface_noise := FastNoiseLite.new()
@@ -43,6 +46,13 @@ func _ready() -> void:
 	add_child(_bodies)
 
 	_generate()
+
+	flora = Flora.new()
+	flora.name = "Flora"
+	flora.z_index = -1 # Plants grow behind the blocks; anything overlapping a block is hidden by it.
+	flora.world = self
+	add_child(flora)
+	flora.populate(world_seed)
 
 
 func surface_y(x: int) -> int:

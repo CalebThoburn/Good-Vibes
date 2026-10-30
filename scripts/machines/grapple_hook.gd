@@ -42,6 +42,7 @@ func _init(p_machine: Machine, p_cell: Vector2i, p_direction: Vector2i, p_max_le
 	last_signal_tick = machine.tick_count
 	top_level = true
 	z_index = 1
+	visibility_layer = SunShade.NO_SHADE_LAYER
 
 
 func _ready() -> void:

@@ -1,14 +1,19 @@
-class_name VacuumNozzle
+class_name AirNozzle
 extends Node2D
-## The suction in front of a powered, unblocked vacuum. It pulls the nearest thing ahead
-## toward the nozzle and the machine toward that thing with the same force, so mass
-## decides who moves. Flush against something it pulls harder and grips, so it can cling
-## to walls. Loose single blocks and machines that reach the nozzle get swallowed into
-## the vacuum's storage. Lives while the vacuum keeps getting a signal.
+## Air moving through a tidbit's nozzle while it keeps getting a signal: suction for a
+## vacuum, a blast for an empty launcher.
+##
+## It acts on the nearest thing ahead and on the machine with the same force, so mass
+## decides who moves: suction pulls them together, blowing pushes them apart. Flush
+## against something the force triples, so a blower makes a strong jet against a wall.
+## Suction also grips what it's flush against, so it can cling to walls, and swallows
+## loose single blocks and machines that reach the nozzle into the vacuum's storage.
+
+enum Mode { SUCK, BLOW }
 
 const RANGE := 4.0 * BlockGrid.CELL_SIZE
-## Pull at the nozzle (mass * px/s²), falling off to nothing at RANGE.
-const SUCTION_FORCE := 15000.0
+## Force at the nozzle (mass * px/s²), falling off to nothing at RANGE.
+const AIR_FORCE := 15000.0
 const FLUSH_DISTANCE := 3.0
 const FLUSH_FORCE_MULTIPLIER := 3.0
 ## While flush, the share of motion between the machine and what it's stuck to that is
@@ -22,43 +27,48 @@ const AIR_COLOR := Color(1, 1, 1, 0.35)
 var machine: Machine
 var cell: Vector2i
 var direction: Vector2i
-## The machine tick the vacuum was last powered on.
+var mode: Mode
+## The machine tick the nozzle was last signalled on.
 var last_signal_tick := 0
 
 var _hit_distance := RANGE
 
 
-func _init(p_machine: Machine, p_cell: Vector2i, p_direction: Vector2i) -> void:
+func _init(p_machine: Machine, p_cell: Vector2i, p_direction: Vector2i, p_mode: Mode) -> void:
 	machine = p_machine
 	cell = p_cell
 	direction = p_direction
+	mode = p_mode
 	last_signal_tick = machine.tick_count
 	top_level = true
 	z_index = 1
+	visibility_layer = SunShade.NO_SHADE_LAYER
 
 
 func _physics_process(delta: float) -> void:
 	if not machine.is_running() or machine.tick_count > last_signal_tick:
 		queue_free()
 		return
-	_suck(delta)
+	_push_air(delta)
 	queue_redraw()
 
 
 func _draw() -> void:
-	# Streaks of air flowing into the nozzle.
+	# Streaks of air flowing into (or out of) the nozzle.
 	var nozzle := machine.muzzle(cell, direction)
 	var aim := machine.aim(direction)
 	var side := aim.orthogonal()
 	var flow := fmod(Time.get_ticks_msec() / 1000.0 * 3.0, 1.0)
+	if mode == Mode.SUCK:
+		flow = 1.0 - flow
 	for i in 3:
-		var along := fposmod(1.0 - flow - i / 3.0, 1.0) * _hit_distance
+		var along := fposmod(flow - i / 3.0, 1.0) * _hit_distance
 		var spread := side * (i - 1) * RAY_SPREAD * (1.0 + along / RANGE)
 		var start := nozzle + aim * along + spread
 		draw_line(start, start - aim * 4.0 - spread * 0.2, AIR_COLOR, 1.0)
 
 
-func _suck(delta: float) -> void:
+func _push_air(delta: float) -> void:
 	var nozzle := machine.muzzle(cell, direction)
 	var aim := machine.aim(direction)
 	var hit := _nearest_hit(aim)
@@ -70,18 +80,20 @@ func _suck(delta: float) -> void:
 		return
 	var distance := maxf((hit.position - nozzle).dot(aim), 0.0)
 	_hit_distance = distance
-	if distance <= SWALLOW_DISTANCE and _swallow(body):
+	var sucking := mode == Mode.SUCK
+	if sucking and distance <= SWALLOW_DISTANCE and _swallow(body):
 		return
 
-	var force := SUCTION_FORCE * pow(1.0 - distance / RANGE, 2.0)
+	var force := AIR_FORCE * pow(1.0 - distance / RANGE, 2.0)
 	var flush := distance <= FLUSH_DISTANCE
 	if flush:
 		force *= FLUSH_FORCE_MULTIPLIER
-	var impulse := aim * force * delta
+	# Toward each other when sucking, apart when blowing.
+	var impulse := aim * force * delta * (1.0 if sucking else -1.0)
 	MachinePhysics.apply_impulse(body, -impulse, hit.position)
 	if machine.holder:
 		MachinePhysics.apply_impulse(machine.holder, impulse, nozzle)
-	if flush:
+	if sucking and flush:
 		_grip(body, hit.position, nozzle)
 
 

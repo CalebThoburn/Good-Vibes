@@ -2,7 +2,7 @@ class_name Player
 extends CharacterBody2D
 ## The player can't touch blocks directly; everything goes through machines.
 
-const STARTING_TIDBITS: Dictionary[StringName, int] = {&"handle": 4, &"trigger": 8, &"launcher": 8, &"flip_flop": 6, &"drill": 4, &"vacuum": 4, &"power": 4, &"nand": 6}
+const STARTING_TIDBITS: Dictionary[StringName, int] = {&"handle": 4, &"trigger": 8, &"launcher": 8, &"flip_flop": 6, &"drill": 4, &"vacuum": 4, &"nand": 6}
 const STARTING_ITEMS: Dictionary[StringName, int] = {&"string": 12}
 const MESSAGE_TIME := 2.5
 ## How long after being pulled the player keeps air control instead of ground grip.
@@ -19,7 +19,8 @@ const WALL_JUMP_REACH := 2.0
 @export_group("Movement")
 @export var move_speed := 150.0
 @export var acceleration := 1400.0
-## Lower than on the ground so swings and pulls keep their momentum.
+## Lower than on the ground so swings and pulls keep their momentum. Only applies while
+## steering; with no input the player keeps drifting.
 @export var air_acceleration := 400.0
 @export var jump_velocity := 270.0
 ## Added to (not set as) the upward speed when jumping off a wall.
@@ -43,6 +44,7 @@ var _pulled_time := 0.0
 @onready var _cursor: BlockCursor = $BlockCursor
 @onready var _held: HeldMachine = $HeldMachine
 @onready var _message: Label = $HUD/Message
+@onready var _sprite: Control = $Sprite
 
 
 func _ready() -> void:
@@ -56,6 +58,8 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_held.aim_along(get_global_mouse_position() - global_position)
+	# Draw on whole world pixels, like the blocks, so shading lines up with the sprite.
+	_sprite.position = (global_position.round() - global_position) - _sprite.size * 0.5
 
 
 func _physics_process(delta: float) -> void:
@@ -114,8 +118,10 @@ func _move(delta: float) -> void:
 
 	var direction := Input.get_axis(&"move_left", &"move_right")
 	_pulled_time = maxf(_pulled_time - delta, 0.0)
-	var accel := acceleration if is_on_floor() and _pulled_time == 0.0 else air_acceleration
-	velocity.x = move_toward(velocity.x, direction * move_speed, accel * delta)
+	var grounded := is_on_floor() and _pulled_time == 0.0
+	if grounded or direction != 0.0: # In the air, momentum carries unless you steer.
+		var accel := acceleration if grounded else air_acceleration
+		velocity.x = move_toward(velocity.x, direction * move_speed, accel * delta)
 	move_and_slide()
 
 	for i in get_slide_collision_count():

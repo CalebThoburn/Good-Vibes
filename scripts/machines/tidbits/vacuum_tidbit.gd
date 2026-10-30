@@ -1,6 +1,6 @@
 extends TidbitType
 ## While powered, sucks the way it faces. With a clear path to the edge of the grid it
-## pulls on whatever is in front (see VacuumNozzle). With another tidbit in the way, it
+## pulls on whatever is in front (see AirNozzle). With another tidbit in the way, it
 ## sucks that tidbit's contents into its own storage instead, one thing per tick.
 ## Either way, it pushes what it holds out through its pipe, one thing per tick.
 
@@ -28,11 +28,11 @@ func on_tick(machine: Machine, cell: Vector2i) -> void:
 		if thing != null and not machine.give(cell, thing):
 			machine.give(blocker, thing) # Full; put it back.
 		return
-	var nozzle := machine.get_effect(cell) as VacuumNozzle
+	var nozzle := machine.get_effect(cell) as AirNozzle
 	if nozzle:
 		nozzle.last_signal_tick = machine.tick_count
 	else:
-		machine.start_effect(cell, VacuumNozzle.new(machine, cell, direction))
+		machine.start_effect(cell, AirNozzle.new(machine, cell, direction, AirNozzle.Mode.SUCK))
 
 
 func get_status(design: MachineDesign, cell: Vector2i) -> String:

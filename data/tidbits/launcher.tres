@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"launcher"
 display_name = "Launcher"
-description = "When a signal reaches its port, fires what it holds the way it faces: blocks or whole machines, loaded through its valve (blue) by pipe. The barrel needs a clear path to the edge of the grid.
+description = "When a signal reaches its port, fires what it holds the way it faces: blocks or whole machines, loaded through its valve (blue) by pipe. With nothing loaded it blows air instead, pushing things away and the machine back. The barrel needs a clear path to the edge of the grid.
 With String: fires a grapple instead, which reels in whatever it hits and holds on while the signal keeps coming (try a T Flip-Flop). Light things get pulled to the machine; heavy things pull the machine to them."
 color = Color(0.42, 0.5, 0.45, 1)
 ports = Array[Vector2]([Vector2(0.15, 0.5)])

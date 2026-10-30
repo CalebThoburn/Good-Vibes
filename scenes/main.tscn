@@ -1,28 +1,30 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://oq3yys25vbuf"]
 
-[ext_resource type="Script" path="res://scripts/world/block_world.gd" id="1_world"]
+[ext_resource type="Script" uid="uid://cwe5cqm3ffr0e" path="res://scripts/world/block_world.gd" id="1_world"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
 [ext_resource type="PackedScene" path="res://scenes/ui/crafting_ui.tscn" id="3_crafting"]
+[ext_resource type="Script" path="res://scripts/sky/sky.gd" id="4_sky"]
+[ext_resource type="Script" path="res://scripts/sky/sun_shade.gd" id="5_shade"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1793267835]
 
-[node name="Background" type="CanvasLayer" parent="."]
+[node name="Sky" type="CanvasLayer" parent="." node_paths=PackedStringArray("world_light", "world")]
 layer = -1
-
-[node name="Sky" type="ColorRect" parent="Background"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.53, 0.72, 0.86, 1)
-
-[node name="World" type="Node2D" parent="."]
-script = ExtResource("1_world")
-
-[node name="Player" parent="." node_paths=PackedStringArray("world") instance=ExtResource("2_player")]
+script = ExtResource("4_sky")
+world_light = NodePath("../WorldLight")
 world = NodePath("../World")
 
-[node name="CraftingUI" parent="." node_paths=PackedStringArray("player") instance=ExtResource("3_crafting")]
+[node name="WorldLight" type="CanvasModulate" parent="."]
+
+[node name="SunShade" type="CanvasLayer" parent="." node_paths=PackedStringArray("sky")]
+script = ExtResource("5_shade")
+sky = NodePath("../Sky")
+
+[node name="World" type="Node2D" parent="." unique_id=1902330009]
+script = ExtResource("1_world")
+
+[node name="Player" parent="." unique_id=1987581930 node_paths=PackedStringArray("world") instance=ExtResource("2_player")]
+world = NodePath("../World")
+
+[node name="CraftingUI" parent="." unique_id=1260291875 node_paths=PackedStringArray("player") instance=ExtResource("3_crafting")]
 player = NodePath("../Player")

@@ -16,9 +16,9 @@ script = ExtResource("1_player")
 shape = SubResource("RectangleShape2D_body")
 
 [node name="Sprite" type="ColorRect" parent="."]
-offset_left = -5.5
+offset_left = -6.0
 offset_top = -13.0
-offset_right = 5.5
+offset_right = 6.0
 offset_bottom = 13.0
 mouse_filter = 2
 color = Color(0.9, 0.75, 0.35, 1)
@@ -29,16 +29,19 @@ z_index = 1
 script = ExtResource("3_held")
 
 [node name="Camera2D" type="Camera2D" parent="."]
+offset = Vector2(0, -48)
 zoom = Vector2(2, 2)
 position_smoothing_enabled = true
 position_smoothing_speed = 8.0
 
 [node name="BlockCursor" type="Node2D" parent="."]
+visibility_layer = 2
 top_level = true
 z_index = 10
 script = ExtResource("2_cursor")
 
 [node name="HUD" type="CanvasLayer" parent="."]
+layer = 3
 
 [node name="Label" type="Label" parent="HUD"]
 offset_left = 12.0
@@ -46,7 +49,7 @@ offset_top = 8.0
 offset_right = 600.0
 offset_bottom = 60.0
 text = "A/D move   Space jump (also off walls)   P workbench
-Q / E / Space triggers   LMB pick up placed machine"
+Q / E / Space triggers   LMB pick up placed machine   Hold T: fast-forward time"
 
 [node name="Message" type="Label" parent="HUD"]
 anchors_preset = 7
