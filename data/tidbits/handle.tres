@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TidbitType" format=3]
+
+[ext_resource type="Script" path="res://scripts/machines/tidbits/handle_tidbit.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"handle"
+display_name = "Handle"
+description = "Lets the machine be equipped: drag it onto yourself. The machine pivots on its handle while held."
+color = Color(0.62, 0.43, 0.25, 1)

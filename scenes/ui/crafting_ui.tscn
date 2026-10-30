@@ -1,0 +1,105 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/crafting_ui.gd" id="1_ui"]
+[ext_resource type="Script" path="res://scripts/ui/world_drop_zone.gd" id="2_zone"]
+[ext_resource type="Script" path="res://scripts/ui/crafting_grid.gd" id="3_grid"]
+
+[node name="CraftingUI" type="CanvasLayer"]
+layer = 2
+script = ExtResource("1_ui")
+
+[node name="WorldDropZone" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_zone")
+
+[node name="Panel" type="PanelContainer" parent="."]
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -396.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Panel/Margin/VBox"]
+layout_mode = 2
+text = "Workbench"
+
+[node name="Bench" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Grid" type="Control" parent="Panel/Margin/VBox/Bench"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("3_grid")
+
+[node name="Buttons" type="VBoxContainer" parent="Panel/Margin/VBox/Bench"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Build" type="Button" parent="Panel/Margin/VBox/Bench/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Build"
+
+[node name="Clear" type="Button" parent="Panel/Margin/VBox/Bench/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Clear"
+
+[node name="ItemsLabel" type="Label" parent="Panel/Margin/VBox/Bench/Buttons"]
+layout_mode = 2
+text = "Items"
+
+[node name="Items" type="HFlowContainer" parent="Panel/Margin/VBox/Bench/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="TidbitsLabel" type="Label" parent="Panel/Margin/VBox"]
+layout_mode = 2
+text = "Tidbits"
+
+[node name="Tidbits" type="HFlowContainer" parent="Panel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Help" type="Label" parent="Panel/Margin/VBox"]
+modulate = Color(1, 1, 1, 0.6)
+layout_mode = 2
+size_flags_vertical = 10
+theme_override_font_sizes/font_size = 11
+text = "Drag tidbits onto the grid. R rotates the hovered tidbit.
+Right-click a port, then another, to wire them (again to unwire).
+Drag items onto a tidbit to attach them (Shift: whole stack).
+Drag a machine onto yourself to equip it, or into the world to place it."
+autowrap_mode = 3
+
+[node name="MachinesLabel" type="Label" parent="Panel/Margin/VBox"]
+layout_mode = 2
+text = "Machines"
+
+[node name="Machines" type="HFlowContainer" parent="Panel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2

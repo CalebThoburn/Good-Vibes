@@ -1,0 +1,147 @@
+class_name Player
+extends CharacterBody2D
+## The player can't touch blocks directly; everything goes through machines.
+
+const STARTING_TIDBITS: Dictionary[StringName, int] = {&"handle": 4, &"trigger": 8, &"launcher": 8, &"flip_flop": 6}
+const STARTING_ITEMS: Dictionary[StringName, int] = {&"string": 12}
+const MESSAGE_TIME := 2.5
+## How long after being pulled the player keeps air control instead of ground grip.
+const PULLED_GRIP_DELAY := 0.15
+
+@export var world: BlockWorld
+## Used when ropes and other machines pull on the player.
+@export var mass := 30.0
+
+@export_group("Movement")
+@export var move_speed := 150.0
+@export var acceleration := 1400.0
+## Lower than on the ground so swings and pulls keep their momentum.
+@export var air_acceleration := 400.0
+@export var jump_velocity := 270.0
+## Impulse applied to loose blocks the player walks into.
+@export var push_impulse := 20.0
+
+@export_group("Machines")
+## How far away the player can place and pick up machines, in blocks.
+@export var reach := 6.0
+
+var inventory := Inventory.new()
+## Set while a menu is open; stops picking up machines.
+var ui_open := false
+
+var _gravity: float = ProjectSettings.get_setting("physics/2d/default_gravity")
+var _pulled_time := 0.0
+
+@onready var _cursor: BlockCursor = $BlockCursor
+@onready var _held: HeldMachine = $HeldMachine
+@onready var _message: Label = $HUD/Message
+
+
+func _ready() -> void:
+	global_position = world.spawn_position()
+	for id in STARTING_TIDBITS:
+		inventory.add_tidbits(id, STARTING_TIDBITS[id])
+	for id in STARTING_ITEMS:
+		inventory.add_items(id, STARTING_ITEMS[id])
+	inventory.changed.connect(_on_inventory_changed)
+
+
+func _process(_delta: float) -> void:
+	_held.aim_along(get_global_mouse_position() - global_position)
+
+
+func _physics_process(delta: float) -> void:
+	_move(delta)
+	_interact()
+	if global_position.y > world.kill_y():
+		global_position = world.spawn_position()
+		velocity = Vector2.ZERO
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"activate"):
+		_activate_machines()
+
+
+## Pushes the player like a rigid body of `mass`. While being pushed, ground grip is
+## relaxed so things like ropes can actually drag the player.
+func apply_impulse(impulse: Vector2) -> void:
+	velocity += impulse / mass
+	_pulled_time = PULLED_GRIP_DELAY
+
+
+## Shows a short message on screen.
+func notify(text: String) -> void:
+	_message.text = text
+	get_tree().create_timer(MESSAGE_TIME).timeout.connect(func() -> void:
+		if _message.text == text:
+			_message.text = "")
+
+
+## Handles a machine dragged out of the inventory to a point in the world: dropping it
+## on the player toggles equipping it, anywhere else places it.
+func drop_machine(design: MachineDesign, global_point: Vector2) -> void:
+	if Rect2(global_position - Vector2(10, 16), Vector2(20, 32)).has_point(global_point):
+		if inventory.equipped == design:
+			inventory.equip(null)
+		elif not inventory.equip(design):
+			notify("A machine needs a Handle to be equipped")
+	elif global_position.distance_to(global_point) > reach * BlockGrid.CELL_SIZE:
+		notify("Too far away")
+	elif not world.can_place_machine(global_point):
+		notify("Something is in the way")
+	else:
+		inventory.remove_machine(design)
+		world.spawn_machine(design, global_point)
+
+
+func _move(delta: float) -> void:
+	if not is_on_floor():
+		velocity.y += _gravity * delta
+	if Input.is_action_just_pressed(&"jump") and is_on_floor():
+		velocity.y = -jump_velocity
+	elif Input.is_action_just_released(&"jump") and velocity.y < 0.0:
+		velocity.y *= 0.5 # Short hop.
+
+	var direction := Input.get_axis(&"move_left", &"move_right")
+	_pulled_time = maxf(_pulled_time - delta, 0.0)
+	var accel := acceleration if is_on_floor() and _pulled_time == 0.0 else air_acceleration
+	velocity.x = move_toward(velocity.x, direction * move_speed, accel * delta)
+	move_and_slide()
+
+	for i in get_slide_collision_count():
+		var collision := get_slide_collision(i)
+		var body := collision.get_collider() as RigidBody2D
+		if body:
+			body.apply_impulse(-collision.get_normal() * push_impulse, collision.get_position() - body.global_position)
+
+
+## Highlights a placed machine under the cursor; the pick-up button grabs it.
+func _interact() -> void:
+	var target := get_global_mouse_position()
+	var machine := world.machine_at(target) \
+			if not ui_open and global_position.distance_to(target) <= reach * BlockGrid.CELL_SIZE else null
+	if machine == null:
+		_cursor.hide()
+		return
+	var size := Vector2.ONE * MachineDesign.SIZE * MachineDesign.TIDBIT_PIXELS
+	_cursor.show_rect(machine.global_transform, Rect2(-size * 0.5, size), Color(1, 1, 1, 0.9))
+	if Input.is_action_just_pressed(&"pick_up"):
+		if inventory.add_machine(machine.view.machine.design):
+			machine.queue_free()
+		else:
+			notify("No free machine slots")
+
+
+## Q activates the equipped machine and any placed machine under the cursor.
+func _activate_machines() -> void:
+	if _held.view.machine:
+		_held.view.machine.activate()
+	var hovered := world.machine_at(get_global_mouse_position())
+	if hovered:
+		hovered.view.machine.activate()
+
+
+func _on_inventory_changed() -> void:
+	if _held.get_design() != inventory.equipped:
+		_held.hold(inventory.equipped, world, self)

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemType" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/string_item.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"string"
+display_name = "String"
+description = "Add to a Launcher to make it a grapple. Each string adds 2 blocks of reach."
+color = Color(0.92, 0.9, 0.82, 1)

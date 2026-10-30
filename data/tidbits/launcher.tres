@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="TidbitType" format=3]
+
+[ext_resource type="Script" path="res://scripts/machines/tidbits/launcher_tidbit.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"launcher"
+display_name = "Launcher"
+description = "Fires a block of dirt the way it faces when a signal reaches its port. The barrel needs a clear path to the edge of the grid.
+With String: fires a grapple that reels in whatever it hits and holds on for as long as the signal keeps coming (try a T Flip-Flop). Light things get pulled to the machine; heavy things pull the machine to them."
+color = Color(0.42, 0.5, 0.45, 1)
+ports = Array[Vector2]([Vector2(0.15, 0.5)])
+accepted_items = Dictionary[StringName, int]({
+&"string": 16
+})

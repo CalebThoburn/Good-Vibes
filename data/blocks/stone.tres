@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="BlockType" format=3]
+
+[ext_resource type="Script" path="res://scripts/blocks/block_type.gd" id="1_type"]
+
+[resource]
+script = ExtResource("1_type")
+id = &"stone"
+display_name = "Stone"
+density = 2.6
+strength = 6.0
+color = Color(0.46, 0.46, 0.5, 1)
+texture_noise = 0.1
