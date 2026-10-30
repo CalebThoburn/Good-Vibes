@@ -1,12 +1,12 @@
 extends TidbitType
-## Burns wood to give off light: one piece every BURN_TICKS, for as long as it has any.
+## Burns wood to give off light, one piece every BURN_TICKS, for as long as it has any.
 ## Wood gets loaded on the workbench, or comes in by pipe (or a vacuum sucking it straight
 ## in).
 
-## Machine ticks one piece of wood burns for (20 ticks a second).
-const BURN_TICKS := 600
+## Machine ticks one piece of wood burns for (20 ticks a second): two minutes.
+const BURN_TICKS := 2400
 ## How far the light reaches, in pixels.
-@export var light_radius := 96.0
+@export var light_radius := 112.0
 
 
 func can_store(thing: Variant) -> bool:

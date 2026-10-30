@@ -9,6 +9,8 @@ extends Node2D
 const SPECIES_DIR := "res://data/plants/"
 ## Plant time a random tick advances a plant by, in seconds.
 const TICK_TIME := 0.5
+## Bigger steps for growing the world's plants before play starts, to load faster.
+const PREWARM_STEP := 1.5
 ## Random ticks per plant per second, on average. Below 1 / TICK_TIME, plants live slower
 ## than real time.
 const TICKS_PER_SECOND := 0.5
@@ -75,8 +77,8 @@ func populate(seed_value: int) -> void:
 			if _is_soil_cell(cell, kind) and not world.terrain.has_block(cell + Vector2i.UP):
 				spawn_plant(kind, cell)
 			x += _rng.randi_range(gap.x, gap.y)
-	for i in roundi(prewarm_time / TICK_TIME):
-		step_all(TICK_TIME)
+	for i in roundi(prewarm_time / PREWARM_STEP):
+		step_all(PREWARM_STEP)
 
 
 ## Anything the ground has gone from under falls.
@@ -242,7 +244,7 @@ func _crumble(points: PackedVector2Array, color: Color) -> void:
 	fade.set_color(1, Color(color, 0.0))
 	particles.color_ramp = fade
 	particles.visibility_layer = SunShade.NO_SHADE_LAYER
-	particles.z_index = Plant.Z_FRONT_LEAVES
+	particles.z_index = Plant.Z_GRASS
 	add_child(particles)
 	particles.emitting = true
 	particles.finished.connect(particles.queue_free)

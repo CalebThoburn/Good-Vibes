@@ -77,7 +77,7 @@ func _process(_delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(&"sun_step_right", to_light.rotated(RAY_SPREAD) * to_uv)
 	RenderingServer.global_shader_parameter_set(&"sun_density", lerpf(0.045, 0.018, brightness))
 	RenderingServer.global_shader_parameter_set(&"sun_ambient", lerpf(0.3, 0.6, brightness))
-	RenderingServer.global_shader_parameter_set(&"sun_screen_size", get_viewport().get_texture().get_size() * 1.0)
+	RenderingServer.global_shader_parameter_set(&"sun_silhouette_size", Vector2(_silhouette.size))
 	RenderingServer.global_shader_parameter_set(&"sun_tint", sky.world_light.color if sky and sky.world_light else Color.WHITE)
 	_update_lamps()
 

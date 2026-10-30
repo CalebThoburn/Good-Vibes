@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"lantern"
 display_name = "Lantern"
-description = "Burns wood to give off light, one piece every 30 seconds, for as long as it has any. Load wood into it on the workbench, or feed it through its valve (blue)."
+description = "Burns wood to give off light, one piece every 2 minutes, for as long as it has any. Load wood into it on the workbench, or feed it through its valve (blue)."
 color = Color(0.55, 0.45, 0.3, 1)
 valves = Array[Vector2]([Vector2(0.5, 0.88)])
 storage = 8

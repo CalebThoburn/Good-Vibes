@@ -132,7 +132,7 @@ sun_ambient={
 "type": "float",
 "value": 1.0
 }
-sun_screen_size={
+sun_silhouette_size={
 "type": "vec2",
 "value": Vector2(0, 0)
 }

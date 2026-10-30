@@ -6,6 +6,8 @@ extends Node2D
 ## It acts on the nearest thing ahead and on the machine with the same force, so mass
 ## decides who moves: suction pulls them together, blowing pushes them apart. Flush
 ## against something the force triples, so a blower makes a strong jet against a wall.
+## Blowing also always thrusts the machine back, even with nothing ahead, so launchers
+## can drive a machine along.
 ## Suction also grips what it's flush against, so it can cling to walls, and swallows
 ## loose single blocks, machines and cut pieces of tree (as wood) that reach the nozzle
 ## into the vacuum's storage.
@@ -15,6 +17,8 @@ enum Mode { SUCK, BLOW }
 const RANGE := 4.0 * BlockGrid.CELL_SIZE
 ## Force at the nozzle (mass * px/s²), falling off to nothing at RANGE.
 const AIR_FORCE := 15000.0
+## The least a blower pushes its machine back with, whatever is ahead of it.
+const THRUST := 20000.0
 const FLUSH_DISTANCE := 3.0
 const FLUSH_FORCE_MULTIPLIER := 3.0
 ## While flush, the share of motion between the machine and what it's stuck to that is
@@ -73,27 +77,27 @@ func _push_air(delta: float) -> void:
 	var nozzle := machine.muzzle(cell, direction)
 	var aim := machine.aim(direction)
 	var hit := _nearest_hit(aim)
-	_hit_distance = RANGE
-	if hit.is_empty():
-		return
-	var body := MachinePhysics.body_of(hit.collider)
-	if body == null:
-		return
-	var distance := maxf((hit.position - nozzle).dot(aim), 0.0)
-	_hit_distance = distance
 	var sucking := mode == Mode.SUCK
-	if sucking and distance <= SWALLOW_DISTANCE and _swallow(body):
-		return
-
-	var force := AIR_FORCE * pow(1.0 - distance / RANGE, 2.0)
-	var flush := distance <= FLUSH_DISTANCE
-	if flush:
-		force *= FLUSH_FORCE_MULTIPLIER
-	# Toward each other when sucking, apart when blowing.
-	var impulse := aim * force * delta * (1.0 if sucking else -1.0)
-	MachinePhysics.apply_impulse(body, -impulse, hit.position)
+	var body := MachinePhysics.body_of(hit.collider) if not hit.is_empty() else null
+	_hit_distance = RANGE
+	var force := 0.0
+	var flush := false
+	if body:
+		var distance := maxf((hit.position - nozzle).dot(aim), 0.0)
+		_hit_distance = distance
+		if sucking and distance <= SWALLOW_DISTANCE and _swallow(body):
+			return
+		force = AIR_FORCE * pow(1.0 - distance / RANGE, 2.0)
+		flush = distance <= FLUSH_DISTANCE
+		if flush:
+			force *= FLUSH_FORCE_MULTIPLIER
+		# Toward each other when sucking, apart when blowing.
+		MachinePhysics.apply_impulse(body, aim * force * delta * (-1.0 if sucking else 1.0), hit.position)
 	if machine.holder:
-		MachinePhysics.apply_impulse(machine.holder, impulse, nozzle)
+		if sucking:
+			MachinePhysics.apply_impulse(machine.holder, aim * force * delta, nozzle)
+		else: # Thrust goes through the machine's middle, so it drives it along without tipping it.
+			MachinePhysics.apply_central_impulse(machine.holder, -aim * maxf(force, THRUST) * delta)
 	if sucking and flush:
 		_grip(body, hit.position, nozzle)
 

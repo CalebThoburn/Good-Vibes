@@ -22,7 +22,7 @@ const PLANT_LAYER := 8
 ## Lanterns on handles left lying around at the start, as blocks across from spawn.
 @export var starting_lanterns: Array[int] = [-14, 22, -40, 55]
 ## Wood each starting lantern holds.
-@export var lantern_wood := 4
+@export var lantern_wood := 8
 
 var terrain: BlockGrid
 var flora: Flora

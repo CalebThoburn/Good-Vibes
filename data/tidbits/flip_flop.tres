@@ -6,6 +6,6 @@
 script = ExtResource("1_script")
 id = &"flip_flop"
 display_name = "T Flip-Flop"
-description = "Each signal on its input (left port) turns it on or off. While on, it sends a signal out of its output (right port) every tick."
+description = "Each signal on its input (left port) turns it on or off. While on, it sends a signal out of both outputs (right ports) every tick."
 color = Color(0.5, 0.36, 0.7, 1)
-ports = Array[Vector2]([Vector2(0.12, 0.5), Vector2(0.88, 0.5)])
+ports = Array[Vector2]([Vector2(0.12, 0.5), Vector2(0.88, 0.28), Vector2(0.88, 0.72)])

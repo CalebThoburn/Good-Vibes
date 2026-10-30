@@ -13,24 +13,25 @@ extends Node2D
 ##   and the tree grows one main leaf mass on its trunk line (a few on big trees). Leaves
 ##   stay in the crown, and the trunk keeps stretching to lift the crown. Branches cost
 ##   energy, and one whose own leaves can't pay for it is shed, so trees stay covered.
-##   Branches are drawn in one layer, level with the player; each leaf patch sits in a
-##   layer behind or in front of them, and the two leaf layers shift a little against the
-##   branches as the camera passes.
+##   Branches are drawn in one layer; each leaf patch sits in a layer behind or in front
+##   of them, and the two leaf layers shift a little against the branches as the camera
+##   passes. All of it is behind the player.
 ## - Creepers (grass) send runners sideways over the ground, climbing up and dropping
 ##   down steps within limits, with blades along them that grow taller only when there's
-##   nowhere left to spread and the light is good. Drawn with the front leaves.
+##   nowhere left to spread and the light is good. Drawn in front of the player.
 ## Stepped by Flora's random ticks.
 
 ## Each leaf re-measures its light every this many steps; they take turns.
 const LIGHT_ROUNDS := 8
 ## Leaf layers: behind the branches and in front of them.
 const LEAF_DEPTHS: Array[int] = [-1, 1]
-## Draw order, back to front (blocks are at 0, in front of all of it). The player is
-## drawn level with the branches.
-const Z_ROOTS := -4
-const Z_BACK_LEAVES := -3
-const Z_BRANCHES := -2
-const Z_FRONT_LEAVES := -1
+## Draw order, back to front (blocks are at 0, in front of all of it). Every layer of a
+## tree is behind the player (who's at -2), and grass is in front of the player.
+const Z_ROOTS := -6
+const Z_BACK_LEAVES := -5
+const Z_BRANCHES := -4
+const Z_FRONT_LEAVES := -3
+const Z_GRASS := -1
 ## How far a leaf layer shifts per pixel the camera is off to the side of the plant.
 const LAYER_PARALLAX := 0.012
 ## Back leaves are drawn a little darker so the layers read apart.
@@ -124,7 +125,8 @@ func setup(p_species: PlantSpecies, p_flora: Flora, p_anchor_cell: Vector2i, see
 	_max_parts = roundi(species.max_parts * _rng.randf_range(0.55, 1.15))
 	reserves = species.sapling_reserves
 	if _creeping():
-		_wood.z_index = Z_FRONT_LEAVES # Grass sits with the front leaves.
+		_wood.z_index = Z_GRASS # In front of the player.
+		_leaves[1].z_index = Z_GRASS
 		var base := _add_segment(PlantPart.Kind.STEM, null, Vector2i.UP, RUNNER_HEIGHT, 0)
 		base.length = RUNNER_HEIGHT
 		_add_leaf(base, Vector2.ZERO)
@@ -137,7 +139,8 @@ func setup(p_species: PlantSpecies, p_flora: Flora, p_anchor_cell: Vector2i, see
 
 func step(dt: float) -> void:
 	age += dt
-	if not check_support():
+	if not flora.world.terrain.has_block(anchor_cell): # Runners are checked when the terrain changes.
+		fall()
 		return
 	_measure(dt)
 	_distribute()
@@ -160,21 +163,23 @@ func step(dt: float) -> void:
 
 
 ## Lets go of anything the ground has gone from under: the whole plant if its anchor
-## block is gone, or for creepers, any runner left with nothing to lie on or climb.
-## Returns whether the plant is still standing.
+## block is gone, or for creepers, any runner with a pixel over empty air or with no wall
+## left to climb. Returns whether the plant is still standing.
 func check_support() -> bool:
 	if not flora.world.terrain.has_block(anchor_cell):
 		fall()
 		return false
 	if not _creeping():
 		return true
-	var below := Vector2(0.0, RUNNER_HEIGHT + 1.0)
 	for part in parts.duplicate():
 		if part == parts[0] or part.kind != PlantPart.Kind.STEM or not parts.has(part):
 			continue
-		var held: bool
-		if part.direction.y == 0: # Lying on the ground.
-			held = _solid_at(part.start + below) or _solid_at(part.end + below)
+		var held := true
+		if part.direction.y == 0: # Lying on the ground: every pixel needs ground under it.
+			for step in roundi(part.length) + 1:
+				if not _ground_under(part.start + Vector2(part.direction) * step):
+					held = false
+					break
 		else: # Up or down a wall.
 			var wall := Vector2(part.run) * (1.0 if part.direction == Vector2i.UP else -1.0)
 			held = _solid_at((part.start + part.end) * 0.5 + wall * 2.0)
@@ -730,6 +735,13 @@ func _runner_step(from: Vector2, run: Vector2i) -> Array:
 	if length < 1.0 or not _over_soil(from + ahead * length * 0.5):
 		return []
 	return [run, length]
+
+
+## Whether there's ground under a runner pixel, or diagonally under it (so the pixel that
+## steps out over an edge to climb down it still counts).
+func _ground_under(local_point: Vector2) -> bool:
+	var below := local_point + Vector2(0.0, RUNNER_HEIGHT + 1.0)
+	return _solid_at(below) or _solid_at(below + Vector2.LEFT) or _solid_at(below + Vector2.RIGHT)
 
 
 func _solid_at(local_point: Vector2) -> bool:

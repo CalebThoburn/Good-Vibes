@@ -1,8 +1,13 @@
 class_name PlantDebris
 extends RigidBody2D
 ## A cut or fallen piece of plant. It tumbles like any loose body, then crumbles away.
+## Fallen grass tries to take root where it comes to rest instead.
 
 const LIFETIME := 25.0
+## Fallen grass gives up and crumbles sooner.
+const CREEPER_LIFETIME := 6.0
+## Below this speed (px/s) a piece has come to rest.
+const RESTING_SPEED := 8.0
 const MASS_PER_AREA := 0.08
 ## Square pixels of stem per piece of wood it gives when sucked up.
 const AREA_PER_WOOD := 60.0
@@ -61,7 +66,28 @@ func wood() -> int:
 
 func _physics_process(delta: float) -> void:
 	_age += delta
-	if _age > LIFETIME:
+	var creeping := species.form == PlantSpecies.Form.CREEPER
+	if creeping and _age > 0.4 and linear_velocity.length() < RESTING_SPEED and _replant():
+		queue_free()
+		return
+	if _age > (CREEPER_LIFETIME if creeping else LIFETIME):
 		flora.crumble_parts(species, global_transform, parts)
 		queue_free()
+
+
+## The middle of the piece, in its own space.
+func _middle() -> Vector2:
+	var total := Vector2.ZERO
+	for part in parts:
+		total += (part.start + part.end) * 0.5
+	return total / parts.size()
+
+
+## Grass that's come to rest takes root in the ground under it, if it can. Returns
+## whether it did.
+func _replant() -> bool:
+	var center := global_transform * _middle()
+	var query := PhysicsRayQueryParameters2D.create(center, center + Vector2.DOWN * 12.0, BlockWorld.BLOCK_LAYER, [get_rid()])
+	var hit := get_world_2d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty() and flora.try_sprout(species, hit.position, hit.normal)
 

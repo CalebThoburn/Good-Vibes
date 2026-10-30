@@ -31,6 +31,14 @@ static func velocity_of(body: PhysicsBody2D) -> Vector2:
 	return Vector2.ZERO
 
 
+## Pushes a body through its middle, so it doesn't spin.
+static func apply_central_impulse(body: PhysicsBody2D, impulse: Vector2) -> void:
+	if body is RigidBody2D:
+		body.apply_central_impulse(impulse)
+	else:
+		apply_impulse(body, impulse, body.global_position)
+
+
 static func apply_impulse(body: PhysicsBody2D, impulse: Vector2, global_point: Vector2) -> void:
 	if body is RigidBody2D:
 		body.apply_impulse(impulse, global_point - body.global_position)

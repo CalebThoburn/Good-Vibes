@@ -20,7 +20,7 @@ func _init(p_flora: Flora, p_species: PlantSpecies, p_velocity: Vector2) -> void
 	species = p_species
 	velocity = p_velocity
 	visibility_layer = SunShade.NO_SHADE_LAYER
-	z_index = Plant.Z_FRONT_LEAVES
+	z_index = Plant.Z_GRASS
 
 
 func _physics_process(delta: float) -> void:

@@ -59,6 +59,8 @@ const CLOUD_SPAN := 2400.0
 ## shows; bigger than any screen so the edges never come up short.
 const STAR_SPAN := Vector2(1600.0, 700.0)
 const STAR_COUNT := 900
+## The sky is in this group, for anything that needs to know how light it is.
+const GROUP := &"sky"
 const SUN_SIZE := 22
 ## The sun and moon travel round this point (fractions of the screen): a circle of this
 ## radius (a fraction of the screen height) above the horizon, stretched BELOW_STRETCH
@@ -107,6 +109,7 @@ var _days := 0.0
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	layer = -1
 	add_child(_canvas)
 	_canvas.draw.connect(_draw_sky)
