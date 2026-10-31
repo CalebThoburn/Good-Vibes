@@ -1,8 +1,9 @@
 class_name HeadPart
 extends BodyPart
-## A head on a neck, hanging off the front of the body. The brain points it somewhere
-## (reach_for) and it swings there at its own speed, paying energy for every pixel it
-## moves; with no energy left it can only move slowly. The head tips down as it goes
+## A head on a neck, hanging off the front of the body. It carries the brain, which runs
+## the rest of the body: with the head gone, nothing tells the legs where to go. The
+## brain points it somewhere (reach_for) and it swings there at its own speed, paying
+## its own energy for every pixel it moves; with no energy left it can only move slowly. The head tips down as it goes
 ## lower, so it grazes face-down. It's drawn by turning its pixel pattern to the head's
 ## angle, sampling each screen pixel back into the pattern so it never breaks up.
 
@@ -25,10 +26,13 @@ var base := Vector2.ZERO
 var center := Vector2.ZERO
 ## How far it's tipped from looking ahead, radians (positive: down).
 var pitch := 0.0
+## What runs the creature (CreatureSpecies.brain), while the head is on.
+var brain: CreatureBrain
 
 var _offset := Vector2.ZERO # From the base to the head, facing right.
 var _target := Vector2.INF # Where the mouth should go; INF for resting.
 var _pattern: Dictionary[Vector2i, Color] = {}
+var _eye := Vector2i.ZERO
 var _coat := Color.WHITE
 
 
@@ -78,10 +82,10 @@ func update(delta: float) -> void:
 	elif _target != Vector2.INF:
 		var aim := _target - _mouth_offset(pitch) - base
 		wanted = Vector2(aim.x * creature.facing, aim.y).limit_length(neck_length)
-	var swing := speed * delta * (1.0 if creature.energy > 0.0 or creature.dead else 0.3)
+	var swing := speed * delta * (1.0 if has_energy() or creature.dead else 0.3)
 	var moved := _offset.move_toward(wanted, swing)
 	if not creature.dead:
-		creature.spend(moved.distance_to(_offset) * creature.species.head_cost)
+		spend(moved.distance_to(_offset) * creature.species.head_cost)
 	_offset = moved
 	pitch = clampf(atan2(_offset.y, absf(_offset.x) + 2.0) * 1.1 + 0.3, -0.3, 1.35)
 	center = base + Vector2(_offset.x * creature.facing, _offset.y)
@@ -105,11 +109,43 @@ func draw(art: CreatureArt) -> void:
 			local.x *= creature.facing
 			var source := Vector2i(local.rotated(-turn).floor())
 			if _pattern.has(source):
-				art.draw_rect(Rect2(middle + Vector2(x, y), Vector2.ONE), _pattern[source])
+				var pixel: Color = _pattern[source]
+				if source == _eye and creature.sleeping:
+					pixel = color.darkened(0.25) # Eyes shut.
+				art.draw_rect(Rect2(middle + Vector2(x, y), Vector2.ONE), pixel)
+	if creature.sleeping: # A "z" drifting up.
+		var drift := fmod(Time.get_ticks_msec() / 1000.0, 2.0)
+		var corner := (center + Vector2(creature.facing * 2.0, -head_size.y - 3.0 - drift * 3.0)).round()
+		var z := Color(1.0, 1.0, 1.0, 1.0 - drift * 0.5)
+		art.draw_rect(Rect2(corner, Vector2(3.0, 1.0)), z)
+		art.draw_rect(Rect2(corner + Vector2(1.0, 1.0), Vector2.ONE), z)
+		art.draw_rect(Rect2(corner + Vector2(0.0, 2.0), Vector2(3.0, 1.0)), z)
+	if creature.calling > 0.0: # Lines bursting from the mouth.
+		var mouth_at := mouth().round()
+		for i in 3:
+			var spread := Vector2(creature.facing * 2.0, (i - 1) * 2.0)
+			art.draw_rect(Rect2(mouth_at + spread + Vector2(creature.facing * (1.0 - creature.calling) * 3.0, 0.0),
+					Vector2(2.0, 1.0)), Color(1.0, 1.0, 1.0, creature.calling))
 
 
 func layer() -> float:
 	return 2.0
+
+
+func hit_distance(point: Vector2) -> float:
+	var neck_end := center - Vector2(creature.facing, 0.0).rotated(pitch * creature.facing) * head_size.x * 0.3
+	return minf(point.distance_to(center) - head_size.x * 0.5 - 1.0,
+			segment_distance(point, base, neck_end) - neck_width * 0.5)
+
+
+func extent() -> Rect2:
+	return Rect2(base, Vector2.ZERO).expand(center).grow(head_size.x * 0.5 + snout * 0.5)
+
+
+func move_by(motion: Transform2D) -> void:
+	base = motion * base
+	center = motion * center
+	pitch += motion.get_rotation() * creature.facing
 
 
 func to_data() -> Dictionary:
@@ -150,5 +186,6 @@ func _build_pattern() -> void:
 		_pattern[Vector2i(x, top)] = _coat.darkened(0.06)
 	_pattern[Vector2i(left - 1, top + 1)] = ear_color # The ear, sticking out back.
 	_pattern[Vector2i(left - 2, top + 1)] = ear_color.darkened(0.2)
-	_pattern[Vector2i(right - 2, top + 1)] = eye_color
+	_eye = Vector2i(right - 2, top + 1)
+	_pattern[_eye] = eye_color
 	_pattern[Vector2i(right + roundi(snout) - 1, 0)] = color.darkened(0.35) # Nostril.

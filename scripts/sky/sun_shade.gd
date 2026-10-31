@@ -5,7 +5,7 @@ extends Node
 ## lit_material) darkens its own pixels by how much of that silhouette lies between them
 ## and the light. That gives both depth (pixels get darker further into the ground) and
 ## cast shadows (under overhangs and trees), which swing round as the sun crosses the sky.
-## Burning lanterns (LanternGlow) add warm light on top. Because each object lights its
+## Burning lanterns (LanternGlow) and glowing creatures (CreatureGlow) add light on top. Because each object lights its
 ## own pixels, the light can't drift out of line with them as things move.
 
 ## Canvas items on this visibility layer (bit 2) don't cast shade: strings, air, cursors.
@@ -75,8 +75,10 @@ func _process(_delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(&"sun_step", to_light * to_uv)
 	RenderingServer.global_shader_parameter_set(&"sun_step_left", to_light.rotated(-RAY_SPREAD) * to_uv)
 	RenderingServer.global_shader_parameter_set(&"sun_step_right", to_light.rotated(RAY_SPREAD) * to_uv)
-	RenderingServer.global_shader_parameter_set(&"sun_density", lerpf(0.045, 0.018, brightness))
-	RenderingServer.global_shader_parameter_set(&"sun_ambient", lerpf(0.3, 0.6, brightness))
+	# Overcast, the light comes from all over: softer shade, lighter shadows.
+	var overcast: float = sky.weather.mute() if sky and sky.weather else 0.0
+	RenderingServer.global_shader_parameter_set(&"sun_density", lerpf(0.045, 0.018, brightness) * (1.0 - overcast * 0.4))
+	RenderingServer.global_shader_parameter_set(&"sun_ambient", lerpf(lerpf(0.3, 0.6, brightness), 0.75, overcast * 0.5))
 	RenderingServer.global_shader_parameter_set(&"sun_silhouette_size", Vector2(_silhouette.size))
 	RenderingServer.global_shader_parameter_set(&"sun_tint", sky.world_light.color if sky and sky.world_light else Color.WHITE)
 	_update_lamps()
@@ -84,7 +86,7 @@ func _process(_delta: float) -> void:
 
 func _update_lamps() -> void:
 	var count := 0
-	for glow: LanternGlow in get_tree().get_nodes_in_group(LanternGlow.GROUP):
+	for glow: Node2D in get_tree().get_nodes_in_group(LanternGlow.GROUP): # Lanterns and glowing creatures.
 		if count == MAX_LAMPS:
 			break
 		_lamp_image.set_pixel(count, 0, Color(glow.global_position.x, glow.global_position.y, glow.radius, glow.strength()))

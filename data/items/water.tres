@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemType" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_type.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"water"
+display_name = "Water"
+description = "Drawn up by plants from the soil. Fireflies sip it."
+color = Color(0.35, 0.55, 0.9, 1)

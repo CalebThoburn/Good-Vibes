@@ -1,0 +1,129 @@
+[gd_resource type="Resource" script_class="CreatureSpecies" format=3]
+
+[ext_resource type="Script" path="res://scripts/creatures/creature_species.gd" id="1_species"]
+[ext_resource type="Script" path="res://scripts/creatures/parts/head_part.gd" id="4_head"]
+[ext_resource type="Script" path="res://scripts/creatures/parts/wing_part.gd" id="5_wing"]
+[ext_resource type="Script" path="res://scripts/creatures/parts/stomach_part.gd" id="6_stomach"]
+[ext_resource type="Script" path="res://scripts/creatures/body_part.gd" id="8_part"]
+
+[ext_resource type="Script" path="res://scripts/creatures/mind/mind.gd" id="20_mind"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/creature_action.gd" id="21_action"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/walk_to_action.gd" id="22_walk"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/bite_action.gd" id="23_bite"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/call_action.gd" id="24_call"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/sleep_action.gd" id="25_sleep"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/flee_action.gd" id="26_flee"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/roam_action.gd" id="27_roam"]
+
+[sub_resource type="Resource" id="act_walk"]
+script = ExtResource("22_walk")
+id = &"walk_to"
+verb = "swimming to"
+targets = Array[StringName]([&"plant", &"block", &"creature", &"player", &"machine", &"item", &"liquid"])
+
+[sub_resource type="Resource" id="act_bite"]
+script = ExtResource("23_bite")
+id = &"bite"
+verb = "biting"
+targets = Array[StringName]([&"plant", &"item", &"creature", &"player", &"block", &"liquid"])
+
+[sub_resource type="Resource" id="act_call"]
+script = ExtResource("24_call")
+id = &"call"
+verb = "blowing bubbles"
+max_time = 3.0
+
+[sub_resource type="Resource" id="act_sleep"]
+script = ExtResource("25_sleep")
+id = &"sleep"
+verb = "sleeping"
+max_time = 90.0
+
+[sub_resource type="Resource" id="act_flee"]
+script = ExtResource("26_flee")
+id = &"flee"
+verb = "running from"
+targets = Array[StringName]([&"creature", &"player", &"machine"])
+max_time = 8.0
+
+[sub_resource type="Resource" id="act_roam"]
+script = ExtResource("27_roam")
+id = &"roam"
+verb = "wandering"
+
+[sub_resource type="Resource" id="body"]
+script = ExtResource("6_stomach")
+name = &"body"
+color = Color(0.55, 0.62, 0.7, 1)
+color_variation = 0.08
+size = Vector2(7, 3)
+puffs = 4
+puff_radius = Vector2(0.8, 1.4)
+underside_shade = 0.4
+texture_noise = 0.03
+toughness = 2.0
+blood_capacity = 0.5
+upkeep = 0.0003
+bleeding = 0.05
+makeup = Dictionary[StringName, int]({&"meat": 1})
+food_item = &"water"
+capacity = 0.5
+digest_rate = 0.02
+blood_per_food = 1.0
+dung_per_food = 0.0
+bile_capacity = 3.0
+
+[sub_resource type="Resource" id="head"]
+script = ExtResource("4_head")
+name = &"head"
+parent_name = &"body"
+socket = Vector2(1, 0)
+color = Color(0.5, 0.57, 0.65, 1)
+size_variation = 0.0
+neck_length = 0.5
+neck_width = 0.0
+head_size = Vector2(3, 3)
+snout = 1.0
+speed = 30.0
+ear_color = Color(0.5, 0.57, 0.65, 1)
+eye_color = Color(0.05, 0.05, 0.08, 1)
+coat_from = &""
+toughness = 1.2
+blood_capacity = 0.1
+upkeep = 0.0002
+bleeding = 0.05
+
+[sub_resource type="Resource" id="fin"]
+script = ExtResource("5_wing")
+name = &"tail_fin"
+parent_name = &"body"
+socket = Vector2(-1, 0)
+color = Color(0.45, 0.52, 0.62, 1)
+length = 3.5
+flight_cost = 0.0002
+beat_rate = 4.0
+toughness = 0.8
+blood_capacity = 0.03
+upkeep = 0.0001
+bleeding = 0.02
+
+[resource]
+script = ExtResource("1_species")
+id = &"fish"
+display_name = "Fish"
+body_plan = Array[ExtResource("8_part")]([SubResource("body"), SubResource("head"), SubResource("fin")])
+brain = ExtResource("20_mind")
+actions = Array[ExtResource("21_action")]([SubResource("act_walk"), SubResource("act_bite"), SubResource("act_call"), SubResource("act_sleep"), SubResource("act_flee"), SubResource("act_roam")])
+instincts = Dictionary[String, Vector4]({"bite|liquid:water": Vector4(0.1, 0, 0, 0), "sleep|": Vector4(0, 0, 0, 0.3)})
+curiosity = 0.05
+bile_rate = 0.05
+heal_rate = 0.03
+population = 10
+mass = 1.0
+swims = true
+suffocation = 0.03
+walk_speed = 20.0
+acceleration = 80.0
+start_blood = 0.8
+food = Array[StringName]([])
+sight = 120.0

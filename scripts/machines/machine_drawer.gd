@@ -57,7 +57,7 @@ static func draw_detailed(canvas: CanvasItem, design: MachineDesign, origin: Vec
 
 ## The badges shown on a tidbit, in order: attached upgrades as {kind = &"attached",
 ## id}, stored items as {kind = &"stored", id}, stored machines as {kind = &"machine",
-## machine}.
+## machine}, live creatures as {kind = &"creature", creature}.
 static func badges(design: MachineDesign, cell: Vector2i) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for item_id: StringName in design.items_on(cell):
@@ -66,7 +66,22 @@ static func badges(design: MachineDesign, cell: Vector2i) -> Array[Dictionary]:
 		result.append({kind = &"stored", id = item_id})
 	for stored_machine: MachineDesign in design.machines_in(cell):
 		result.append({kind = &"machine", machine = stored_machine})
+	for creature: StoredCreature in design.creatures_in(cell):
+		result.append({kind = &"creature", creature = creature})
 	return result
+
+
+## A held creature as an icon: a little body in its species' colours, with a head.
+static func draw_creature(canvas: CanvasItem, rect: Rect2, creature: StoredCreature) -> void:
+	var plan: Array[BodyPart] = Fauna.species_named(creature.species).body_plan
+	var body := Rect2(rect.position + rect.size * Vector2(0.15, 0.35), rect.size * Vector2(0.55, 0.35))
+	canvas.draw_rect(body, plan[0].color)
+	for part in plan:
+		if part is HeadPart:
+			canvas.draw_rect(Rect2(body.end.x - rect.size.x * 0.05, body.position.y - rect.size.y * 0.1,
+					rect.size.x * 0.2, rect.size.y * 0.2), part.color)
+		elif part is TorsoPart and part.glow_color.a > 0.0:
+			canvas.draw_rect(Rect2(body.position, body.size * Vector2(0.4, 1.0)), part.glow_color)
 
 
 ## Where the index-th badge on a cell sits: rows of three, filling down from the top
@@ -97,6 +112,8 @@ static func _draw_badges(canvas: CanvasItem, design: MachineDesign, cell: Vector
 				var inner := rect.grow(-rect.size.x * 0.1)
 				canvas.draw_rect(inner, FRAME_COLOR)
 				draw_tidbits(canvas, badge.machine, inner.position, inner.size.x / MachineDesign.SIZE)
+			&"creature":
+				draw_creature(canvas, rect, badge.creature)
 		if count > 1 and cell_size >= 40.0: # Too small to read in the machine bar.
 			var baseline := Vector2(rect.position.x, rect.end.y - 1.0)
 			canvas.draw_string_outline(font, baseline, str(count), HORIZONTAL_ALIGNMENT_RIGHT, rect.size.x, 10, 3, Color.BLACK)

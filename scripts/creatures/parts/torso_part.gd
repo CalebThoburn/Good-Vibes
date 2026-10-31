@@ -1,9 +1,12 @@
 class_name TorsoPart
 extends BodyPart
-## The body everything else hangs off: a coat (wool, for sheep) shaped as an oval with
-## puffs round its edge, rolled per creature. Other parts attach to its edge: a socket's
-## direction from the middle is followed out to the last pixel of coat, so legs come out
-## from under the wool and the neck from its front, whatever shape it rolled.
+## A segment of the body: a coat (wool, for sheep) shaped as an oval with puffs round
+## its edge, rolled per creature. The segment the body is built on sits over the
+## creature's middle; others hang off its front or back (sheep: chest, belly, haunch),
+## overlapping it a little so the coat reads as one. Other parts attach to a segment's
+## edge: a socket's direction from the middle is followed out to the last pixel of coat,
+## so legs come out from under the wool and the neck from its front, whatever shape it
+## rolled. A segment with a glow colour can light up (a firefly's tail).
 
 @export var size := Vector2(22.0, 11.0)
 ## Puffs around the edge of the oval.
@@ -14,6 +17,10 @@ extends BodyPart
 @export_range(0.0, 1.0) var underside_shade := 0.3
 ## Per-pixel lumpiness of the coat.
 @export_range(0.0, 0.3) var texture_noise := 0.06
+## How far it overlaps the segment it hangs off, px.
+@export var overlap := 4.0
+## The colour it lights up when the creature glows. Transparent: it doesn't.
+@export var glow_color := Color(0.0, 0.0, 0.0, 0.0)
 
 ## The middle of the body, global.
 var center := Vector2.ZERO
@@ -22,6 +29,7 @@ var center := Vector2.ZERO
 var _pixels: Dictionary[Vector2i, bool] = {}
 var _bounds := Rect2i()
 var _textures: Array[ImageTexture] = [] # Facing right, then left.
+var _glow_textures: Array[ImageTexture] = []
 var _sockets: Dictionary[Vector2, Vector2] = {}
 
 
@@ -52,8 +60,29 @@ func roll(rng: RandomNumberGenerator) -> void:
 	_paint(rng, circles)
 
 
+func fits(candidate: BodyPart) -> bool:
+	return candidate == null or candidate is TorsoPart
+
+
 func update(_delta: float) -> void:
 	center = creature.global_position + Vector2(0.0, -creature.ride_height)
+	if parent is TorsoPart:
+		var offset := offset_from(parent)
+		center = parent.center + Vector2(offset.x * creature.facing, offset.y)
+
+
+## Where its middle sits from a segment it hangs off, facing right.
+func offset_from(segment: TorsoPart) -> Vector2:
+	return Vector2(socket.x * (segment.size.x + size.x) * 0.5 - signf(socket.x) * overlap, socket.y * segment.size.y * 0.5)
+
+
+func extent() -> Rect2:
+	var left := -_bounds.end.x if creature.facing < 0 else _bounds.position.x
+	return Rect2(center + Vector2(left, _bounds.position.y), _bounds.size)
+
+
+func move_by(motion: Transform2D) -> void:
+	center = motion * center
 
 
 func attach_point(socket_at: Vector2, _side: int) -> Vector2:
@@ -66,11 +95,20 @@ func attach_point(socket_at: Vector2, _side: int) -> Vector2:
 func draw(art: CreatureArt) -> void:
 	var flipped := creature.facing < 0
 	var left := -_bounds.end.x if flipped else _bounds.position.x
-	art.sprite(_textures[1 if flipped else 0], center.round() + Vector2(left, _bounds.position.y))
+	var corner := center.round() + Vector2(left, _bounds.position.y)
+	art.sprite(_textures[1 if flipped else 0], corner)
+	if not _glow_textures.is_empty() and creature.glow > 0.0:
+		art.draw_texture(_glow_textures[1 if flipped else 0], corner.round(), Color(1.0, 1.0, 1.0, creature.glow))
+
+
+func hit_distance(point: Vector2) -> float:
+	var local := point - center.round()
+	local.x *= creature.facing
+	return -1.0 if _pixels.has(Vector2i(local.floor())) else INF
 
 
 func layer() -> float:
-	return 0.0
+	return 0.0 if parent == null else 0.1
 
 
 ## The last pixel of coat out from the middle toward a socket.
@@ -109,7 +147,18 @@ func _paint(rng: RandomNumberGenerator, circles: Array[Vector3]) -> void:
 			tint = tint.lightened(0.1)
 		tint = tint.lightened(rng.randf_range(-texture_noise, texture_noise))
 		image.set_pixelv(pixel - _bounds.position, tint)
-	_textures.append(ImageTexture.create_from_image(image))
+	_add_textures(_textures, image)
+	if glow_color.a > 0.0: # Brightest in the middle.
+		var lit := Image.create_empty(_bounds.size.x, _bounds.size.y, false, Image.FORMAT_RGBA8)
+		for pixel in _pixels:
+			var edge := (Vector2(pixel) + Vector2(0.5, 0.5)).length() / (size.length() * 0.5)
+			lit.set_pixelv(pixel - _bounds.position, glow_color.lerp(Color.WHITE, clampf(0.6 - edge, 0.0, 0.6)))
+		_add_textures(_glow_textures, lit)
+
+
+## Adds an image and its mirror image (for facing left) as textures.
+static func _add_textures(textures: Array[ImageTexture], image: Image) -> void:
+	textures.append(ImageTexture.create_from_image(image))
 	var mirrored := image.duplicate() as Image
 	mirrored.flip_x()
-	_textures.append(ImageTexture.create_from_image(mirrored))
+	textures.append(ImageTexture.create_from_image(mirrored))

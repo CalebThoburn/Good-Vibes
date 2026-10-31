@@ -1,6 +1,6 @@
 extends TidbitType
-## Fires what it holds (blocks or whole machines, loaded on the workbench or by pipe) the
-## way it faces when a signal reaches its port. Its barrel needs a clear path to the edge
+## Fires what it holds (blocks, whole machines, live creatures or other items, loaded on
+## the workbench or by pipe) the way it faces when a signal reaches its port. Its barrel needs a clear path to the edge
 ## of the grid. With string attached it fires a grapple instead, which holds on while the
 ## signal keeps coming. With nothing to fire, it blows air for as long as the signal lasts.
 
@@ -12,7 +12,7 @@ const POWER := 0
 
 
 func can_store(thing: Variant) -> bool:
-	return thing is MachineDesign or (thing is StringName and Items.get_type(thing).block != &"")
+	return thing is MachineDesign or thing is StoredCreature or (thing is StringName and thing != &"string")
 
 
 func on_input(machine: Machine, cell: Vector2i, input: int) -> void:
@@ -31,8 +31,12 @@ func on_input(machine: Machine, cell: Vector2i, input: int) -> void:
 	machine.design.unstore(cell, shot)
 	if shot is MachineDesign:
 		machine.launch_machine(cell, direction, shot, launch_speed)
-	else:
+	elif shot is StoredCreature:
+		machine.launch_creature(cell, direction, shot, launch_speed)
+	elif Items.get_type(shot).block:
 		machine.launch_block(cell, direction, Blocks.id_of(Items.get_type(shot).block), launch_speed)
+	else:
+		machine.launch_item(cell, direction, shot, launch_speed)
 
 
 func get_problem(design: MachineDesign, cell: Vector2i) -> String:
@@ -46,7 +50,7 @@ func get_status(design: MachineDesign, cell: Vector2i) -> String:
 	if string > 0:
 		return "Grapple reach: %d blocks" % roundi(string * length_per_string / BlockGrid.CELL_SIZE)
 	if design.stored_things(cell).is_empty():
-		return "Empty: blows air. Pipe blocks or machines in to fire them"
+		return "Empty: blows air. Pipe things in to fire them"
 	return ""
 
 

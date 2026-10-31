@@ -1,13 +1,13 @@
 class_name SaveGame
 extends Node
-## Keeps the world between runs: the terrain, loose blocks, placed machines, plants,
-## creatures, the player's inventory and position, and the time of day. Saves every AUTOSAVE_INTERVAL,
+## Keeps the world between runs: the terrain, loose blocks, placed machines, water and
+## blood, plants, creatures, the player's inventory and position, and the time of day. Saves every AUTOSAVE_INTERVAL,
 ## when the game closes, and on the save action (F5); loads at start if there's a save.
 ## The new_world action (F8) deletes the save and starts afresh.
 
 const PATH := "user://save.dat"
 ## Bumped when the format changes in a way old saves can't be read with.
-const VERSION := 1
+const VERSION := 3
 const AUTOSAVE_INTERVAL := 30.0
 
 @export var world: BlockWorld
@@ -68,6 +68,7 @@ func save() -> void:
 		bodies = bodies,
 		plants = world.flora.to_data(),
 		creatures = world.fauna.to_data(),
+		liquids = world.liquids.to_data(),
 		inventory = player.inventory.to_data(),
 		player = {position = player.global_position, velocity = player.velocity},
 		days = sky._days,
@@ -92,6 +93,7 @@ func _load() -> void:
 			body.rotation = entry.transform.get_rotation()
 		body.linear_velocity = entry.velocity
 		body.angular_velocity = entry.spin
+	world.liquids.load_data(data.liquids)
 	world.flora.load_data(data.plants)
 	if data.has("creatures"):
 		world.fauna.load_data(data.creatures)

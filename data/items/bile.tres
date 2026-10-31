@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemType" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_type.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"bile"
+display_name = "Bile"
+description = "Made by a sleeping creature; its stomach needs it to turn food into blood."
+color = Color(0.55, 0.65, 0.2, 1)

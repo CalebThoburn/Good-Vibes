@@ -1,7 +1,6 @@
-[gd_resource type="Resource" script_class="CreatureSpecies" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="CreatureSpecies" format=3]
 
 [ext_resource type="Script" path="res://scripts/creatures/creature_species.gd" id="1_species"]
-[ext_resource type="Script" path="res://scripts/creatures/grazer_brain.gd" id="2_brain"]
 [ext_resource type="Script" path="res://scripts/creatures/parts/torso_part.gd" id="3_torso"]
 [ext_resource type="Script" path="res://scripts/creatures/parts/head_part.gd" id="4_head"]
 [ext_resource type="Script" path="res://scripts/creatures/parts/leg_part.gd" id="5_leg"]
@@ -9,56 +8,158 @@
 [ext_resource type="Script" path="res://scripts/creatures/parts/stomach_part.gd" id="7_stomach"]
 [ext_resource type="Script" path="res://scripts/creatures/body_part.gd" id="8_part"]
 
-[sub_resource type="Resource" id="torso"]
-script = ExtResource("3_torso")
-name = &"torso"
+[ext_resource type="Script" path="res://scripts/creatures/mind/mind.gd" id="20_mind"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/creature_action.gd" id="21_action"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/walk_to_action.gd" id="22_walk"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/bite_action.gd" id="23_bite"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/call_action.gd" id="24_call"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/sleep_action.gd" id="25_sleep"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/flee_action.gd" id="26_flee"]
+[ext_resource type="Script" path="res://scripts/creatures/actions/roam_action.gd" id="27_roam"]
+
+[sub_resource type="Resource" id="act_walk"]
+script = ExtResource("22_walk")
+id = &"walk_to"
+verb = "walking to"
+targets = Array[StringName]([&"plant", &"block", &"creature", &"player", &"machine", &"item", &"liquid"])
+
+[sub_resource type="Resource" id="act_bite"]
+script = ExtResource("23_bite")
+id = &"bite"
+verb = "biting"
+damage = 0.25
+targets = Array[StringName]([&"plant", &"item", &"creature", &"player", &"block", &"liquid"])
+
+[sub_resource type="Resource" id="act_call"]
+script = ExtResource("24_call")
+id = &"call"
+verb = "baaing"
+max_time = 3.0
+
+[sub_resource type="Resource" id="act_sleep"]
+script = ExtResource("25_sleep")
+id = &"sleep"
+verb = "sleeping"
+max_time = 90.0
+
+[sub_resource type="Resource" id="act_flee"]
+script = ExtResource("26_flee")
+id = &"flee"
+verb = "running from"
+targets = Array[StringName]([&"creature", &"player", &"machine"])
+max_time = 8.0
+
+[sub_resource type="Resource" id="act_roam"]
+script = ExtResource("27_roam")
+id = &"roam"
+verb = "wandering"
+
+[sub_resource type="Resource" id="belly"]
+script = ExtResource("7_stomach")
+name = &"belly"
 color = Color(0.9, 0.87, 0.78, 1)
 color_variation = 0.08
-size = Vector2(22, 11)
+size = Vector2(10, 11)
+puffs = 5
+toughness = 8.0
+blood_capacity = 3.0
+upkeep = 0.0025
+makeup = Dictionary[StringName, int]({&"meat": 1, &"wool": 2})
+food_item = &"grass"
+
+[sub_resource type="Resource" id="chest"]
+script = ExtResource("3_torso")
+name = &"chest"
+parent_name = &"belly"
+socket = Vector2(1, -0.05)
+color = Color(0.9, 0.87, 0.78, 1)
+color_variation = 0.08
+size = Vector2(9, 10)
+puffs = 5
+toughness = 6.0
+blood_capacity = 2.5
+upkeep = 0.0015
+bleeding = 0.04
+makeup = Dictionary[StringName, int]({&"meat": 2, &"wool": 2})
+
+[sub_resource type="Resource" id="haunch"]
+script = ExtResource("3_torso")
+name = &"haunch"
+parent_name = &"belly"
+socket = Vector2(-1, 0)
+color = Color(0.9, 0.87, 0.78, 1)
+color_variation = 0.08
+size = Vector2(9, 11)
+puffs = 5
+toughness = 6.0
+blood_capacity = 2.5
+upkeep = 0.0015
+bleeding = 0.04
+makeup = Dictionary[StringName, int]({&"meat": 2, &"wool": 2})
 
 [sub_resource type="Resource" id="head"]
 script = ExtResource("4_head")
 name = &"head"
-parent_name = &"torso"
-socket = Vector2(0.9, 0)
+parent_name = &"chest"
+socket = Vector2(0.8, 0)
 color = Color(0.24, 0.2, 0.18, 1)
 color_variation = 0.06
+toughness = 4.0
+blood_capacity = 2.0
+upkeep = 0.002
+bleeding = 0.03
+makeup = Dictionary[StringName, int]({&"meat": 1})
+coat_from = &"chest"
 
 [sub_resource type="Resource" id="front_leg"]
 script = ExtResource("5_leg")
 name = &"front_leg"
-parent_name = &"torso"
-socket = Vector2(0.5, 1)
+parent_name = &"chest"
+socket = Vector2(0.15, 1)
 paired = true
 color = Color(0.22, 0.19, 0.17, 1)
 knee_direction = 1.0
 gait_group = 0
+toughness = 3.0
+blood_capacity = 1.0
+upkeep = 0.0008
+bleeding = 0.015
+makeup = Dictionary[StringName, int]({&"meat": 1})
 
 [sub_resource type="Resource" id="hind_leg"]
 script = ExtResource("5_leg")
 name = &"hind_leg"
-parent_name = &"torso"
-socket = Vector2(-0.55, 1)
+parent_name = &"haunch"
+socket = Vector2(-0.15, 1)
 paired = true
 color = Color(0.22, 0.19, 0.17, 1)
 knee_direction = -1.0
 gait_group = 1
+toughness = 3.0
+blood_capacity = 1.0
+upkeep = 0.0008
+bleeding = 0.015
+makeup = Dictionary[StringName, int]({&"meat": 1})
 
 [sub_resource type="Resource" id="tail"]
 script = ExtResource("6_tail")
 name = &"tail"
-parent_name = &"torso"
+parent_name = &"haunch"
 socket = Vector2(-1, -0.2)
-
-[sub_resource type="Resource" id="stomach"]
-script = ExtResource("7_stomach")
-name = &"stomach"
-parent_name = &"torso"
+toughness = 1.5
+blood_capacity = 0.2
+upkeep = 0.0002
+bleeding = 0.004
+makeup = Dictionary[StringName, int]({&"wool": 1})
+coat_from = &"haunch"
 
 [resource]
 script = ExtResource("1_species")
 id = &"sheep"
 display_name = "Sheep"
-body_plan = Array[ExtResource("8_part")]([SubResource("torso"), SubResource("head"), SubResource("front_leg"), SubResource("hind_leg"), SubResource("tail"), SubResource("stomach")])
-brain = ExtResource("2_brain")
+body_plan = Array[ExtResource("8_part")]([SubResource("belly"), SubResource("chest"), SubResource("haunch"), SubResource("head"), SubResource("front_leg"), SubResource("hind_leg"), SubResource("tail")])
+brain = ExtResource("20_mind")
+actions = Array[ExtResource("21_action")]([SubResource("act_walk"), SubResource("act_bite"), SubResource("act_call"), SubResource("act_sleep"), SubResource("act_flee"), SubResource("act_roam")])
+instincts = Dictionary[String, Vector4]({"bite|plant:grass": Vector4(0.1, 0, 0, 0), "sleep|": Vector4(0, 0, 0, 0.3)})
+curiosity = 0.05
 population = 6

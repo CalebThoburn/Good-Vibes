@@ -9,8 +9,10 @@ extends Node2D
 ## Blowing also always thrusts the machine back, even with nothing ahead, so launchers
 ## can drive a machine along.
 ## Suction also grips what it's flush against, so it can cling to walls, and swallows
-## loose single blocks, machines and cut pieces of tree (as wood) that reach the nozzle
-## into the vacuum's storage.
+## what reaches the nozzle into the vacuum's storage: loose single blocks, machines, cut
+## pieces of tree (as wood), loose items, pieces of creatures smaller than a block (as
+## what they're made of and still hold), and live creatures smaller than a block, which
+## go on living in there.
 
 enum Mode { SUCK, BLOW }
 
@@ -113,7 +115,8 @@ func _nearest_hit(aim: Vector2) -> Dictionary:
 	for i in 3:
 		var offset := aim.orthogonal() * (i - 1) * RAY_SPREAD
 		var query := PhysicsRayQueryParameters2D.create(origin + offset, nozzle + offset + aim * RANGE,
-				BlockWorld.BLOCK_LAYER | BlockWorld.PLAYER_LAYER | BlockWorld.MACHINE_LAYER, machine.self_colliders)
+				BlockWorld.BLOCK_LAYER | BlockWorld.PLAYER_LAYER | BlockWorld.MACHINE_LAYER | BlockWorld.CREATURE_LAYER,
+				machine.self_colliders)
 		query.collide_with_areas = true # Held machines are areas.
 		var hit := space.intersect_ray(query)
 		if not hit.is_empty() and (hit.position - origin).dot(aim) < nearest_distance:
@@ -135,6 +138,27 @@ func _swallow(body: PhysicsBody2D) -> bool:
 			return false
 		body.queue_free()
 		return true
+	if body is LooseItem:
+		while body.count > 0 and machine.give(cell, body.item_id):
+			body.count -= 1
+		if body.count > 0:
+			return false
+		body.queue_free()
+		return true
+	if body is CreaturePiece:
+		if not body.small():
+			return false
+		var items: Dictionary[StringName, int] = body.items()
+		for item_id in items: # Whatever doesn't fit is lost with the rest of it.
+			for i in items[item_id]:
+				if not machine.give(cell, item_id):
+					break
+		body.queue_free()
+		return true
+	if body is Creature:
+		if body.dead or not body.small() or machine.design.store_room(cell) <= 0:
+			return false
+		return machine.give(cell, StoredCreature.capture(body))
 	var thing: Variant = null
 	if body is BlockBody and body.grid.cells.size() == 1:
 		thing = Blocks.get_type(body.grid.cells.values()[0]).id

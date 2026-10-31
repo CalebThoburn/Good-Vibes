@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemType" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_type.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"grass"
+display_name = "Grass"
+description = "Chewed grass, from a grazing creature's stomach."
+color = Color(0.42, 0.7, 0.26, 1)

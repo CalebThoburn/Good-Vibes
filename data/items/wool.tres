@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemType" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_type.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"wool"
+display_name = "Wool"
+description = "From sheep. Suck up small pieces of a sheep's coat with a vacuum."
+color = Color(0.92, 0.9, 0.82, 1)

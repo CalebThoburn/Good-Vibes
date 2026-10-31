@@ -171,6 +171,10 @@ sun_lamp_count={
 "type": "int",
 "value": 0
 }
+wind_strength={
+"type": "float",
+"value": 1.0
+}
 sun_tint={
 "type": "vec4",
 "value": Vector4(1, 1, 1, 1)

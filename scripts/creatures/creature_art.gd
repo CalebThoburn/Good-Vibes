@@ -5,6 +5,8 @@ extends Node2D
 ## the parts move. Parts draw themselves through the helpers here.
 
 var creature: Creature
+## Parts to draw instead of the creature's own (for a torn-off piece).
+var drawn: Array[BodyPart] = []
 
 
 func _init(p_creature: Creature) -> void:
@@ -14,7 +16,7 @@ func _init(p_creature: Creature) -> void:
 
 
 func _draw() -> void:
-	var parts := creature.parts.duplicate()
+	var parts := (drawn if not drawn.is_empty() else creature.parts).duplicate()
 	parts.sort_custom(func(a: BodyPart, b: BodyPart) -> bool: return a.layer() < b.layer())
 	for part: BodyPart in parts:
 		part.draw(self)

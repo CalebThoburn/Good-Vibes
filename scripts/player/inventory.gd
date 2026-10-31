@@ -1,7 +1,8 @@
 class_name Inventory
 extends RefCounted
 ## What the player carries: loose tidbits and items, the design on the workbench, and
-## finished machines (one of which may be equipped).
+## finished machines (one of which may be equipped). Small creatures the player picks up
+## share the machine slots with machines (see slot), frozen as they were until let out.
 
 signal changed
 
@@ -10,6 +11,8 @@ const MACHINE_SLOTS := 8
 var tidbits: Dictionary[StringName, int] = {}
 var items: Dictionary[StringName, int] = {}
 var machines: Array[MachineDesign] = []
+## Creatures carried in machine slots, after the machines.
+var creatures: Array[StoredCreature] = []
 var workbench := MachineDesign.new()
 var equipped: MachineDesign
 
@@ -17,7 +20,8 @@ var equipped: MachineDesign
 func to_data() -> Dictionary:
 	return {tidbits = tidbits.duplicate(), items = items.duplicate(),
 			machines = machines.map(func(machine: MachineDesign) -> Dictionary: return machine.to_data()),
-			workbench = workbench.to_data(), equipped = machines.find(equipped)}
+			workbench = workbench.to_data(), equipped = machines.find(equipped),
+			creatures = creatures.map(func(creature: StoredCreature) -> Dictionary: return creature.to_data())}
 
 
 func load_data(data: Dictionary) -> void:
@@ -26,7 +30,55 @@ func load_data(data: Dictionary) -> void:
 	machines.assign(data.machines.map(func(machine: Dictionary) -> MachineDesign: return MachineDesign.from_data(machine)))
 	workbench = MachineDesign.from_data(data.workbench)
 	equipped = machines[data.equipped] if data.equipped >= 0 else null
+	creatures.assign(data.get("creatures", []).map(func(creature: Dictionary) -> StoredCreature:
+		return StoredCreature.from_data(creature)))
 	changed.emit()
+
+
+## What's in a machine slot: a MachineDesign, a StoredCreature, or null.
+func slot(index: int) -> Variant:
+	if index < machines.size():
+		return machines[index]
+	if index - machines.size() < creatures.size():
+		return creatures[index - machines.size()]
+	return null
+
+
+func free_slots() -> int:
+	return MACHINE_SLOTS - machines.size() - creatures.size()
+
+
+func add_creature(creature: StoredCreature) -> bool:
+	if free_slots() <= 0:
+		return false
+	creatures.append(creature)
+	changed.emit()
+	return true
+
+
+func remove_creature(creature: StoredCreature) -> void:
+	creatures.erase(creature)
+	changed.emit()
+
+
+## Puts a carried creature into a workbench tidbit that can hold it.
+func store_creature(cell: Vector2i, creature: StoredCreature) -> bool:
+	var type := workbench.get_tidbit(cell)
+	if type == null or workbench.store_room(cell) <= 0 or not type.can_store(creature):
+		return false
+	creatures.erase(creature)
+	workbench.store(cell, creature)
+	changed.emit()
+	return true
+
+
+## Takes a creature out of a workbench tidbit into a machine slot.
+func unstore_creature(cell: Vector2i, creature: StoredCreature) -> bool:
+	if not workbench.creatures_in(cell).has(creature) or not add_creature(creature):
+		return false
+	workbench.unstore(cell, creature)
+	changed.emit()
+	return true
 
 
 func count_of(id: StringName) -> int:
@@ -59,10 +111,11 @@ func place_tidbit(cell: Vector2i, type: TidbitType) -> bool:
 
 
 ## Takes a tidbit off the workbench and back into the inventory, with everything
-## attached to it or held by it. Fails if the machines it holds won't fit.
+## attached to it or held by it. Fails if the machines and creatures it holds won't fit.
 func return_tidbit(cell: Vector2i) -> bool:
 	var held_machines := workbench.machines_in(cell).duplicate()
-	if machines.size() + held_machines.size() > MACHINE_SLOTS:
+	var held_creatures := workbench.creatures_in(cell).duplicate()
+	if held_machines.size() + held_creatures.size() > free_slots():
 		return false
 	var contents: Array[Dictionary] = [workbench.items_on(cell).duplicate(), workbench.stored_on(cell).duplicate()]
 	var type := workbench.remove(cell)
@@ -72,6 +125,7 @@ func return_tidbit(cell: Vector2i) -> bool:
 		for item_id: StringName in counts:
 			items[item_id] = item_count(item_id) + counts[item_id]
 	machines.append_array(held_machines)
+	creatures.append_array(held_creatures)
 	changed.emit()
 	return true
 
@@ -198,7 +252,7 @@ func edit_machine(machine: MachineDesign) -> bool:
 #region Machines
 
 func add_machine(machine: MachineDesign) -> bool:
-	if machines.size() >= MACHINE_SLOTS:
+	if free_slots() <= 0:
 		return false
 	machines.append(machine)
 	changed.emit()

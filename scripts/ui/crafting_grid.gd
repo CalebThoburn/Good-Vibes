@@ -83,6 +83,8 @@ func _get_tooltip(at_position: Vector2) -> String:
 			held.append("%s ×%d" % [Items.get_type(item_id).display_name, design.stored_count(cell, item_id)])
 		if not design.machines_in(cell).is_empty():
 			held.append("Machine ×%d" % design.machines_in(cell).size())
+		for creature: StoredCreature in design.creatures_in(cell):
+			held.append("%s (alive)" % creature.display_name())
 		lines.append("Holds (%d/%d): %s" % [type.storage - design.store_room(cell), type.storage,
 				", ".join(held) if held else "nothing"])
 	var status := type.get_status(design, cell)
@@ -104,6 +106,8 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 			return ItemSlot.drag_item(self, Items.get_type(badge.id), design.stored_count(cell, badge.id), cell, true)
 		&"machine":
 			return MachineSlot.drag_machine(self, badge.machine, cell)
+		&"creature":
+			return MachineSlot.drag_creature(self, badge.creature, cell)
 	var type := design.get_tidbit(cell)
 	if type == null:
 		return null
@@ -125,12 +129,23 @@ func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 			return design.is_empty() and not data.has("from_cell")
 		&"item":
 			return cell != data.get("from_cell") and inventory.takes_item(cell, data.item.id)
+		&"creature":
+			var type := design.get_tidbit(cell)
+			return cell != data.get("from_cell") and type != null and design.store_room(cell) > 0 \
+					and type.can_store(data.creature)
 	return false
 
 
 func _drop_data(at_position: Vector2, data: Variant) -> void:
 	if data.kind == &"machine":
 		inventory.edit_machine(data.machine)
+	elif data.kind == &"creature":
+		if data.has("from_cell"): # From one tidbit to another.
+			design.unstore(data.from_cell, data.creature)
+			design.store(_cell_at(at_position), data.creature)
+			inventory.changed.emit()
+		else:
+			inventory.store_creature(_cell_at(at_position), data.creature)
 	elif data.kind == &"item":
 		if data.has("from_cell"): # Off the tidbit it was on first; anything that won't fit stays in the inventory.
 			if data.stored:

@@ -2,7 +2,8 @@ extends TidbitType
 ## While powered, grinds at whatever is just past its tip. A block breaks loose from
 ## whatever it's part of, leaving a single loose block; a plant part is cut off, along
 ## with everything beyond it. Harder blocks (BlockType.strength) and thicker wood take
-## longer. Its bit needs a clear path to the edge of the grid.
+## longer. A creature (or the player) in the way is hurt every tick instead. Its bit
+## needs a clear path to the edge of the grid.
 
 const POWER := 0
 ## How far past the machine's edge the bit reaches, in pixels.
@@ -10,6 +11,8 @@ const REACH := 3.0
 
 ## Ticks of grinding per point of block strength.
 @export var ticks_per_strength := 1.0
+## Damage done to a creature or the player each tick.
+@export var damage := 0.25
 
 
 func on_input(machine: Machine, cell: Vector2i, input: int) -> void:
@@ -23,6 +26,9 @@ func on_tick(machine: Machine, cell: Vector2i) -> void:
 		state.progress = 0
 		return
 	var tip := machine.muzzle(cell, machine.design.facing(cell), REACH)
+	if _hurt_at(machine, tip):
+		state.progress = 0
+		return
 	var target := []
 	var strength := 0.0
 	var plant_hit := machine.world.flora.part_at(tip)
@@ -47,6 +53,26 @@ func on_tick(machine: Machine, cell: Vector2i) -> void:
 		plant_hit.plant.cut(plant_hit.part)
 	else:
 		block_hit.grid.detach_block(block_hit.cell)
+
+
+## Hurts whatever living thing is at the tip: a creature's part or the player (not the
+## one holding this machine). Returns whether there was one.
+func _hurt_at(machine: Machine, tip: Vector2) -> bool:
+	for creature: Creature in machine.world.get_tree().get_nodes_in_group(Creature.GROUP):
+		if creature.global_position.distance_to(tip) > 48.0:
+			continue
+		var part := creature.part_at(tip)
+		if part:
+			creature.hurt(part, damage, tip)
+			return true
+	var query := PhysicsPointQueryParameters2D.new()
+	query.position = tip
+	query.collision_mask = BlockWorld.PLAYER_LAYER
+	for hit in machine.world.get_world_2d().direct_space_state.intersect_point(query, 1):
+		if hit.collider is Player and hit.collider != machine.holder:
+			hit.collider.hurt(damage, tip)
+			return true
+	return false
 
 
 func get_problem(design: MachineDesign, cell: Vector2i) -> String:

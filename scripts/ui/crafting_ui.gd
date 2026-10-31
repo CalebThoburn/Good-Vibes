@@ -14,6 +14,7 @@ func _ready() -> void:
 	var inventory := player.inventory
 	_grid.inventory = inventory
 	$WorldDropZone.player = player
+	%ItemShelf.inventory = inventory
 	for type in Tidbits.all():
 		var slot := TidbitSlot.new()
 		slot.inventory = inventory

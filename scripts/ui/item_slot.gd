@@ -1,8 +1,9 @@
 class_name ItemSlot
 extends Control
-## One kind of item in the inventory. Drag it onto a workbench tidbit to attach or load
-## it, or drop items from workbench tidbits here to take them out. Dragging moves one; hold
-## Shift for all.
+## One kind of item in the inventory, shown only while the player has some. Drag it onto
+## a workbench tidbit to attach or load it, or drop items from workbench tidbits here (or
+## anywhere on the shelf, see ItemShelf) to take them out. Dragging moves one; hold Shift
+## for all.
 
 const SIZE := 52.0
 
@@ -32,7 +33,8 @@ func _init() -> void:
 
 func _ready() -> void:
 	tooltip_text = "%s\n%s\nDrag onto a tidbit to attach or load it (Shift: whole stack)." % [type.display_name, type.description]
-	inventory.changed.connect(queue_redraw)
+	inventory.changed.connect(_on_inventory_changed)
+	_on_inventory_changed()
 
 
 func _draw() -> void:
@@ -46,16 +48,31 @@ func _draw() -> void:
 	draw_string(font, Vector2(0, size.y - 3), str(count), HORIZONTAL_ALIGNMENT_RIGHT, size.x - 3, 14)
 
 
+## Takes items dropped from a workbench tidbit back into the inventory.
+static func take_back(inventory: Inventory, data: Dictionary) -> void:
+	if data.stored:
+		inventory.unstore_item(data.from_cell, data.item.id, data.amount)
+	else:
+		inventory.detach_item(data.from_cell, data.item.id, data.amount)
+
+
+## Whether drag data is items from a workbench tidbit.
+static func is_from_bench(data: Variant) -> bool:
+	return data is Dictionary and data.get("kind") == &"item" and data.has("from_cell")
+
+
+func _on_inventory_changed() -> void:
+	visible = inventory.item_count(type.id) > 0
+	queue_redraw()
+
+
 func _get_drag_data(_at_position: Vector2) -> Variant:
 	return drag_item(self, type, inventory.item_count(type.id))
 
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-	return data is Dictionary and data.get("kind") == &"item" and data.has("from_cell")
+	return is_from_bench(data)
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
-	if data.stored:
-		inventory.unstore_item(data.from_cell, data.item.id, data.amount)
-	else:
-		inventory.detach_item(data.from_cell, data.item.id, data.amount)
+	take_back(inventory, data)

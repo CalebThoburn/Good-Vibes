@@ -64,6 +64,9 @@ func tick() -> void:
 			type.on_input(self, cell, input.z)
 	for cell in design.tidbits:
 		design.tidbits[cell].on_tick(self, cell)
+	for cell in design.stored_creatures.keys(): # Creatures inside go on living.
+		for creature: StoredCreature in design.creatures_in(cell).duplicate():
+			creature.live(design, cell, 1.0 / MachineClock.TICKS_PER_SECOND)
 
 
 ## Pulses everything wired to a tidbit's port. They see it next tick.
@@ -102,7 +105,19 @@ func launch_machine(cell: Vector2i, direction: Vector2i, launched: MachineDesign
 	_launch(body, heading, speed)
 
 
-## Puts one thing (an item id or a MachineDesign) into a tidbit: into its storage if it
+## Lets a live creature out of the machine's edge, flying out the way it's fired.
+func launch_creature(cell: Vector2i, direction: Vector2i, creature: StoredCreature, speed: float) -> void:
+	var heading := aim(direction)
+	creature.release(world, muzzle(cell, direction, 4.0), heading * speed * 0.5 + MachinePhysics.velocity_of(holder))
+
+
+## Fires a loose item (one that isn't a block) out of the machine's edge.
+func launch_item(cell: Vector2i, direction: Vector2i, item_id: StringName, speed: float) -> void:
+	var heading := aim(direction)
+	LooseItem.drop(world, item_id, 1, muzzle(cell, direction, 3.0), heading * speed + MachinePhysics.velocity_of(holder))
+
+
+## Puts one thing (an item id, a MachineDesign or a StoredCreature) into a tidbit: into its storage if it
 ## holds that kind of thing, otherwise attached as an upgrade if it takes that. Returns
 ## whether it fit.
 func give(cell: Vector2i, thing: Variant) -> bool:

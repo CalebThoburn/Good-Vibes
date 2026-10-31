@@ -1,7 +1,10 @@
 class_name Player
 extends CharacterBody2D
-## The player can't touch blocks directly; everything goes through machines.
+## The player can't touch blocks directly; everything goes through machines. Drills
+## hurt the player (see hurt); health comes back slowly, and with none left the player
+## starts again at the spawn point.
 
+const GROUP := &"player"
 const STARTING_TIDBITS: Dictionary[StringName, int] = {&"handle": 4, &"trigger": 8, &"launcher": 8, &"flip_flop": 6, &"drill": 4, &"vacuum": 4, &"nand": 6}
 const STARTING_ITEMS: Dictionary[StringName, int] = {&"string": 12}
 const MESSAGE_TIME := 2.5
@@ -11,10 +14,18 @@ const PULLED_GRIP_DELAY := 0.15
 const TRIGGER_ACTIONS: Array[StringName] = [&"trigger_q", &"trigger_e", &"trigger_space"]
 ## How close a wall has to be to jump off it.
 const WALL_JUMP_REACH := 2.0
+## How quickly the camera catches up with the player.
+const CAMERA_SMOOTHING := 8.0
 
 @export var world: BlockWorld
 ## Used when ropes and other machines pull on the player.
 @export var mass := 30.0
+
+@export_group("Health")
+@export var max_health := 20.0
+## Health regained per second, once it's been a while since the last hurt.
+@export var heal_rate := 0.5
+@export var heal_delay := 4.0
 
 @export_group("Movement")
 @export var move_speed := 150.0
@@ -50,15 +61,21 @@ var _gravity: float = ProjectSettings.get_setting("physics/2d/default_gravity")
 var _pulled_time := 0.0
 var _dev_block := 0 # Index into Blocks.all() of the block dev mode places.
 var _dev_edit_wait := 0.0
+var health := 0.0
+var _since_hurt := INF
+var _health_bar := ColorRect.new()
+var _health_back := ColorRect.new()
 
 @onready var _cursor: BlockCursor = $BlockCursor
 @onready var _held: HeldMachine = $HeldMachine
 @onready var _message: Label = $HUD/Message
 @onready var _sprite: Control = $Sprite
 @onready var _dev_label: Label = $HUD/DevLabel
+@onready var _camera: Camera2D = $Camera2D
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	_sprite.material = SunShade.lit_material()
 	global_position = world.spawn_position()
 	for id in STARTING_TIDBITS:
@@ -66,9 +83,20 @@ func _ready() -> void:
 	for id in STARTING_ITEMS:
 		inventory.add_items(id, STARTING_ITEMS[id])
 	inventory.changed.connect(_on_inventory_changed)
+	health = max_health
+	_health_back.color = Color(0.0, 0.0, 0.0, 0.5)
+	_health_back.position = Vector2(12.0, 36.0)
+	_health_back.size = Vector2(124.0, 10.0)
+	_health_bar.color = Blood.COLOR.lightened(0.15)
+	_health_bar.position = Vector2(2.0, 2.0)
+	_health_back.add_child(_health_bar)
+	$HUD.add_child(_health_back)
+	_update_health_bar()
 
 
 func _process(_delta: float) -> void:
+	# Smoothing runs on sped-up time while skipping; slowed to match, it doesn't overshoot.
+	_camera.position_smoothing_speed = CAMERA_SMOOTHING / Engine.time_scale
 	_held.aim_along(get_global_mouse_position() - global_position)
 	# Draw on whole world pixels, like the blocks, so shading lines up with the sprite.
 	_sprite.position = (global_position.round() - global_position) - _sprite.size * 0.5
@@ -81,6 +109,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		_move(delta)
 	_interact()
+	_since_hurt += delta
+	if _since_hurt > heal_delay and health < max_health:
+		health = minf(health + heal_rate * delta, max_health)
+		_update_health_bar()
 	if global_position.y > world.kill_y():
 		global_position = world.spawn_position()
 		velocity = Vector2.ZERO
@@ -114,6 +146,27 @@ func _unhandled_input(event: InputEvent) -> void:
 func apply_impulse(impulse: Vector2) -> void:
 	velocity += impulse / mass
 	_pulled_time = PULLED_GRIP_DELAY
+
+
+## Takes damage at a global point (from a drill). At no health, starts again at spawn.
+func hurt(amount: float, at: Vector2) -> void:
+	if dev_mode:
+		return
+	health -= amount
+	_since_hurt = 0.0
+	Blood.spray(self, at, 2, (at - global_position).normalized() + Vector2.UP)
+	if health <= 0.0:
+		Blood.spray(self, global_position, 30, Vector2.UP, 90.0)
+		global_position = world.spawn_position()
+		velocity = Vector2.ZERO
+		health = max_health
+		notify("You were ground up by a drill")
+	_update_health_bar()
+
+
+func _update_health_bar() -> void:
+	_health_back.visible = health < max_health
+	_health_bar.size = Vector2(120.0 * health / max_health, 6.0)
 
 
 ## Shows a short message on screen.
@@ -185,13 +238,35 @@ func _wall_normal() -> Vector2:
 	return Vector2.ZERO
 
 
-## Highlights a placed machine under the cursor; the pick-up button grabs it.
+## Lets a carried creature out into the world at a point.
+func drop_creature(creature: StoredCreature, global_point: Vector2) -> void:
+	if global_position.distance_to(global_point) > reach * BlockGrid.CELL_SIZE:
+		notify("Too far away")
+	elif not world.is_area_free(global_point, Vector2.ONE * 6.0):
+		notify("Something is in the way")
+	else:
+		inventory.remove_creature(creature)
+		creature.release(world, global_point, Vector2.ZERO)
+
+
+## Highlights a placed machine (or a creature small enough to carry) under the cursor;
+## the pick-up button grabs it.
 func _interact() -> void:
 	var target := get_global_mouse_position()
-	var machine := world.machine_at(target) \
-			if not ui_open and global_position.distance_to(target) <= reach * BlockGrid.CELL_SIZE else null
+	var in_reach := not ui_open and global_position.distance_to(target) <= reach * BlockGrid.CELL_SIZE
+	var machine := world.machine_at(target) if in_reach else null
 	if machine == null:
-		_cursor.hide()
+		var creature := _small_creature_at(target) if in_reach else null
+		if creature == null:
+			_cursor.hide()
+			return
+		var bounds := Rect2(creature.global_position - creature.box_size * Vector2(0.5, 1.0), creature.box_size).grow(2.0)
+		_cursor.show_rect(Transform2D.IDENTITY, bounds, Color(1, 1, 1, 0.9))
+		if Input.is_action_just_pressed(&"pick_up"):
+			if inventory.free_slots() > 0:
+				inventory.add_creature(StoredCreature.capture(creature))
+			else:
+				notify("No free machine slots")
 		return
 	var size := Vector2.ONE * MachineDesign.SIZE * MachineDesign.TIDBIT_PIXELS
 	_cursor.show_rect(machine.global_transform, Rect2(-size * 0.5, size), Color(1, 1, 1, 0.9))
@@ -200,6 +275,16 @@ func _interact() -> void:
 			machine.queue_free()
 		else:
 			notify("No free machine slots")
+
+
+## A live creature small enough to carry, at (or very near) a point.
+func _small_creature_at(point: Vector2) -> Creature:
+	for creature: Creature in get_tree().get_nodes_in_group(Creature.GROUP):
+		if not creature.dead and creature.global_position.distance_to(point) < 24.0 and creature.small():
+			var middle := creature.global_position + Vector2(0.0, -creature.ride_height)
+			if creature.part_at(point) or middle.distance_to(point) < 5.0:
+				return creature
+	return null
 
 
 func _set_dev_mode(on: bool) -> void:

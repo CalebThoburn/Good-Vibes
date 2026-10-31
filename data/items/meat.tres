@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemType" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_type.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"meat"
+display_name = "Meat"
+description = "Cut from creatures. Suck up small pieces of a dead or hurt creature with a vacuum."
+color = Color(0.75, 0.32, 0.32, 1)

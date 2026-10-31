@@ -1,5 +1,6 @@
 [gd_scene format=3]
 
+[ext_resource type="Script" path="res://scripts/ui/item_shelf.gd" id="9_shelf"]
 [ext_resource type="Script" path="res://scripts/ui/crafting_ui.gd" id="1_ui"]
 [ext_resource type="Script" path="res://scripts/ui/world_drop_zone.gd" id="2_zone"]
 [ext_resource type="Script" path="res://scripts/ui/crafting_grid.gd" id="3_grid"]
@@ -73,9 +74,18 @@ text = "Clear"
 layout_mode = 2
 text = "Items"
 
-[node name="Items" type="HFlowContainer" parent="Panel/Margin/VBox/Bench/Buttons"]
+[node name="ItemShelf" type="ScrollContainer" parent="Panel/Margin/VBox/Bench/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(228, 0)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+script = ExtResource("9_shelf")
+
+[node name="Items" type="HFlowContainer" parent="Panel/Margin/VBox/Bench/Buttons/ItemShelf"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="TidbitsLabel" type="Label" parent="Panel/Margin/VBox"]
 layout_mode = 2

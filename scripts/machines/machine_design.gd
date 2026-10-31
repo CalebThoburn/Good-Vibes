@@ -22,6 +22,8 @@ const DIRECTIONS: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEF
 @export var stored: Dictionary[Vector2i, Dictionary] = {}
 ## Whole machines each tidbit holds: cell -> [MachineDesign, ...].
 @export var stored_machines: Dictionary[Vector2i, Array] = {}
+## Live creatures each tidbit holds: cell -> [StoredCreature, ...].
+@export var stored_creatures: Dictionary[Vector2i, Array] = {}
 ## Linked connectors in pairs [a0, b0, a1, b1, ...]. A connector is
 ## Vector3i(cell.x, cell.y, port or valve index), and has at most one link.
 @export var wires: Array[Vector3i] = []
@@ -36,8 +38,12 @@ func to_data() -> Dictionary:
 	var machines := {}
 	for cell in stored_machines:
 		machines[cell] = stored_machines[cell].map(func(machine: MachineDesign) -> Dictionary: return machine.to_data())
+	var creatures := {}
+	for cell in stored_creatures:
+		creatures[cell] = stored_creatures[cell].map(func(creature: StoredCreature) -> Dictionary: return creature.to_data())
 	return {tidbits = kinds, rotations = rotations.duplicate(), settings = settings.duplicate(),
 			items = items.duplicate(true), stored = stored.duplicate(true), stored_machines = machines,
+			stored_creatures = creatures,
 			wires = wires.duplicate(), pipes = pipes.duplicate()}
 
 
@@ -51,6 +57,9 @@ static func from_data(data: Dictionary) -> MachineDesign:
 	design.stored.assign(data.stored)
 	for cell: Vector2i in data.stored_machines:
 		design.stored_machines[cell] = data.stored_machines[cell].map(func(machine: Dictionary) -> MachineDesign: return from_data(machine))
+	for cell: Vector2i in data.get("stored_creatures", {}):
+		design.stored_creatures[cell] = data.stored_creatures[cell].map(func(creature: Dictionary) -> StoredCreature:
+			return StoredCreature.from_data(creature))
 	design.wires.assign(data.wires)
 	design.pipes.assign(data.pipes)
 	return design
@@ -152,7 +161,7 @@ func place(cell: Vector2i, type: TidbitType, rotation_steps := 0) -> void:
 func remove(cell: Vector2i) -> TidbitType:
 	var type := get_tidbit(cell)
 	tidbits.erase(cell)
-	for table: Dictionary in [rotations, settings, items, stored, stored_machines]:
+	for table: Dictionary in [rotations, settings, items, stored, stored_machines, stored_creatures]:
 		table.erase(cell)
 	for list: Array[Vector3i] in [wires, pipes]:
 		var i := list.size() - 2
@@ -168,7 +177,7 @@ func remove(cell: Vector2i) -> TidbitType:
 func move(from: Vector2i, to: Vector2i) -> void:
 	tidbits[to] = tidbits[from]
 	tidbits.erase(from)
-	for table: Dictionary in [rotations, settings, items, stored, stored_machines]:
+	for table: Dictionary in [rotations, settings, items, stored, stored_machines, stored_creatures]:
 		if table.has(from):
 			table[to] = table[from]
 			table.erase(from)
@@ -227,9 +236,15 @@ func machines_in(cell: Vector2i) -> Array:
 	return stored_machines.get(cell, [])
 
 
-## Everything a tidbit holds, one entry per kind: item ids, then MachineDesigns.
+## Live creatures a tidbit holds. Don't modify the result.
+func creatures_in(cell: Vector2i) -> Array:
+	return stored_creatures.get(cell, [])
+
+
+## Everything a tidbit holds, one entry per kind: item ids, then MachineDesigns, then
+## StoredCreatures.
 func stored_things(cell: Vector2i) -> Array:
-	return stored_on(cell).keys() + machines_in(cell)
+	return stored_on(cell).keys() + machines_in(cell) + creatures_in(cell)
 
 
 ## How many more things (items or machines) a tidbit can hold.
@@ -237,15 +252,21 @@ func store_room(cell: Vector2i) -> int:
 	var type := get_tidbit(cell)
 	if type == null:
 		return 0
-	var total := machines_in(cell).size()
+	var total := machines_in(cell).size() + creatures_in(cell).size()
 	for count: int in stored_on(cell).values():
 		total += count
 	return type.storage - total
 
 
-## Adds one thing (an item id or a MachineDesign) to what a tidbit holds.
+## Adds one thing (an item id, a MachineDesign or a StoredCreature) to what a tidbit
+## holds.
 func store(cell: Vector2i, thing: Variant, amount := 1) -> void:
-	if thing is MachineDesign:
+	if thing is StoredCreature:
+		if not stored_creatures.has(cell):
+			stored_creatures[cell] = []
+		stored_creatures[cell].append(thing)
+		emit_changed()
+	elif thing is MachineDesign:
 		if not stored_machines.has(cell):
 			stored_machines[cell] = []
 		stored_machines[cell].append(thing)
@@ -255,7 +276,12 @@ func store(cell: Vector2i, thing: Variant, amount := 1) -> void:
 
 
 func unstore(cell: Vector2i, thing: Variant, amount := 1) -> void:
-	if thing is MachineDesign:
+	if thing is StoredCreature:
+		creatures_in(cell).erase(thing)
+		if creatures_in(cell).is_empty():
+			stored_creatures.erase(cell)
+		emit_changed()
+	elif thing is MachineDesign:
 		machines_in(cell).erase(thing)
 		if machines_in(cell).is_empty():
 			stored_machines.erase(cell)

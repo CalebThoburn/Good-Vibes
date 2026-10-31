@@ -1,7 +1,8 @@
 class_name BlockWorld
 extends Node2D
 ## Owns the static terrain grid, every loose BlockBody and placed MachineBody, the
-## plants (Flora) and the creatures (Fauna), and answers block queries across them. Loose blocks resting
+## water and blood in and on the ground (Liquids), the plants (Flora) and the creatures
+## (Fauna), and answers block queries across them. Loose blocks resting
 ## against another mass fuse into it over time (BlockFusion).
 
 const BLOCK_LAYER := 1
@@ -29,6 +30,7 @@ const CREATURE_LAYER := 16
 var terrain: BlockGrid
 var flora: Flora
 var fauna: Fauna
+var liquids: Liquids
 
 var _bodies: Node2D
 var _surface_noise := FastNoiseLite.new()
@@ -62,6 +64,13 @@ func _ready() -> void:
 	var loading := SaveGame.exists() # Then SaveGame fills the world in instead.
 	if not loading:
 		_generate()
+
+	liquids = Liquids.new()
+	liquids.name = "Liquids"
+	liquids.world = self
+	add_child(liquids)
+	if not loading:
+		liquids.generate()
 
 	flora = Flora.new()
 	flora.name = "Flora"

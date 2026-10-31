@@ -2,9 +2,10 @@ class_name LegPart
 extends BodyPart
 ## A leg of two bones hanging off the body. Its foot stays planted where it last stood
 ## while the body moves over it, and when the body has carried the hip too far past it
-## the leg lifts and steps ahead (which costs energy). Legs step in diagonal pairs (see
-## Creature.may_step). Off the ground, the legs dangle. The knee is placed by solving the
-## two bones between hip and foot, bending forward or back.
+## the leg lifts and steps ahead, paid from its own energy (out of energy, it drags).
+## Legs step in diagonal pairs (see Creature.may_step). Off the ground, the legs dangle.
+## The knee is placed by solving the two bones between hip and foot, bending forward or
+## back.
 
 ## Hip to foot, fully straight, px.
 @export var length := 8.0
@@ -79,7 +80,7 @@ func update(delta: float) -> void:
 			_step_t = 0.0
 			_step_from = foot
 			_step_to = rest + Vector2(signf(creature.velocity.x) * stride * 0.4, 0.0)
-			creature.spend(creature.species.step_cost)
+			spend(creature.species.step_cost)
 	_solve_knee()
 
 
@@ -94,6 +95,20 @@ func draw(art: CreatureArt) -> void:
 
 func layer() -> float:
 	return 1.0 if side == Side.NEAR else -1.0
+
+
+func hit_distance(point: Vector2) -> float:
+	return minf(segment_distance(point, hip, knee), segment_distance(point, knee, foot)) - thickness * 0.5
+
+
+func extent() -> Rect2:
+	return Rect2(hip, Vector2.ZERO).expand(knee).expand(foot).grow(thickness * 0.5)
+
+
+func move_by(motion: Transform2D) -> void:
+	hip = motion * hip
+	knee = motion * knee
+	foot = motion * foot
 
 
 ## Places the knee so both bones (half the leg each) reach from hip to foot.

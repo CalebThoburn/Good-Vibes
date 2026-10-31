@@ -47,6 +47,13 @@ const RESERVE_SECONDS := 15.0
 ## Trees only add branches while their leaves make this many times what the tree uses,
 ## or their reserves are full anyway.
 const BRANCH_SURPLUS := 1.1
+## Water each root draws up from the ground per second, how much the plant holds per
+## part, and what each leaf uses per second (all in cells of water, see Liquids).
+const WATER_PER_ROOT := 0.0015
+const WATER_PER_PART := 0.004
+const WATER_PER_LEAF := 0.0001
+## How much worse leaves work dry: they make this share of their energy with no water.
+const DRY_LEAVES := 0.25
 
 static var _wind: ShaderMaterial
 
@@ -59,6 +66,8 @@ var parts: Array[PlantPart] = []
 ## Stored (energy, nutrients).
 var reserves := Vector2.ZERO
 var age := 0.0
+## Water it's drawn up from the ground, for its leaves (and for creatures to sip).
+var water := 0.0
 
 var _rng := RandomNumberGenerator.new()
 ## How readily this plant grows and seeds compared to others of its kind.
@@ -144,7 +153,7 @@ func to_data() -> Dictionary:
 		index[part] = saved.size()
 		saved.append(part.to_data(index.get(part.parent, -1)))
 	return {species = species.id, anchor = anchor_cell, position = position, reserves = reserves, age = age,
-			vigor = _vigor, max_parts = _max_parts, tuft = _tuft, rng = _rng.state, parts = saved}
+			vigor = _vigor, max_parts = _max_parts, tuft = _tuft, rng = _rng.state, water = water, parts = saved}
 
 
 ## Rebuilds a saved plant (see to_data).
@@ -159,6 +168,7 @@ func restore(p_species: PlantSpecies, p_flora: Flora, data: Dictionary) -> void:
 	_max_parts = data.max_parts
 	_tuft = data.tuft
 	_rng.state = data.rng
+	water = data.get("water", 0.0)
 	if _creeping():
 		_wood.z_index = Z_GRASS
 		_leaves[1].z_index = Z_GRASS
@@ -173,6 +183,7 @@ func restore(p_species: PlantSpecies, p_flora: Flora, data: Dictionary) -> void:
 
 func step(dt: float) -> void:
 	age += dt
+	_draw_water(dt)
 	if not flora.world.terrain.has_block(anchor_cell): # Runners are checked when the terrain changes.
 		fall()
 		return
@@ -197,28 +208,14 @@ func step(dt: float) -> void:
 
 
 ## Lets go of anything the ground has gone from under: the whole plant if its anchor
-## block is gone, or for creepers, any runner with a pixel over empty air or with no wall
-## left to climb. Returns whether the plant is still standing.
+## block is gone, and for creepers, every pixel of runner with neither ground nor more
+## grass under it (see _drop_unsupported). Returns whether the plant is still standing.
 func check_support() -> bool:
 	if not flora.world.terrain.has_block(anchor_cell):
 		fall()
 		return false
-	if not _creeping():
-		return true
-	for part in parts.duplicate():
-		if part == parts[0] or part.kind != PlantPart.Kind.STEM or not parts.has(part):
-			continue
-		var held := true
-		if part.direction.y == 0: # Lying on the ground: every pixel needs ground under it.
-			for step in roundi(part.length) + 1:
-				if not _ground_under(part.start + Vector2(part.direction) * step):
-					held = false
-					break
-		else: # Up or down a wall.
-			var wall := Vector2(part.run) * (1.0 if part.direction == Vector2i.UP else -1.0)
-			held = _solid_at((part.start + part.end) * 0.5 + wall * 2.0)
-		if not held:
-			cut(part)
+	if _creeping():
+		_drop_unsupported()
 	return true
 
 
@@ -229,6 +226,34 @@ func cut(part: PlantPart) -> void:
 		return
 	flora.drop_debris(self, _remove_subtree(part))
 	_rebuild()
+
+
+## Gives up some of its water (to a firefly). Returns how much it gave.
+func sip(amount: float) -> float:
+	var given := clampf(water, 0.0, amount)
+	water -= given
+	return given
+
+
+## Roots draw water up out of the wet ground they're in, until the plant holds as much
+## as its size allows, and leaves use it up.
+func _draw_water(dt: float) -> void:
+	var liquids := flora.world.liquids
+	var room := parts.size() * WATER_PER_PART - water
+	var leaves := 0
+	for part in parts:
+		if part.kind == PlantPart.Kind.LEAF:
+			leaves += 1
+		elif part.kind == PlantPart.Kind.ROOT and room > 0.0:
+			var drawn := liquids.take(liquids.cell_at(to_global(part.end)), 0, minf(WATER_PER_ROOT * dt, room))
+			water += drawn
+			room -= drawn
+	water = maxf(water - leaves * WATER_PER_LEAF * dt, 0.0)
+
+
+## How well watered it is, 0 (dry) to 1, for how well its leaves work.
+func _watered() -> float:
+	return clampf(water / maxf(parts.size() * WATER_PER_PART * 0.3, 0.0001), 0.0, 1.0)
 
 
 ## Bitten off by a grazing creature: the leaf is gone, and nothing falls. A plant is
@@ -358,6 +383,212 @@ func _remove_subtree(part: PlantPart) -> Array[PlantPart]:
 	return gone
 
 
+#region Grass support
+
+## Each pixel of a creeper's runners stays only while there's ground or more grass right
+## under it. Corner curves lose any column whose ground has gone. A run of pixels that
+## lets go falls away as debris; grass beyond it that's still held up carries on as a
+## plant of its own.
+func _drop_unsupported() -> void:
+	var held := _held_pixels()
+	var falling: Array[PlantPart] = []
+	var changed := false
+	for part in parts.duplicate():
+		if part == parts[0] or part.kind != PlantPart.Kind.STEM or not parts.has(part):
+			continue
+		if part.fillet and not _fillet_held(part):
+			part.fillet = false
+			flora.crumble_parts(species, global_transform, [part])
+			changed = true
+		var cut := _first_index(part, held, false)
+		if cut < 0:
+			continue
+		_break_runner(part, cut, held, falling)
+		changed = true
+	if not falling.is_empty():
+		flora.drop_debris(self, falling)
+	if changed:
+		_rebuild()
+
+
+## Every pixel of runner in plant space that's held up, worked out from the bottom up:
+## held if what's right under it is solid or another held pixel of runner.
+func _held_pixels() -> Dictionary:
+	var pixels: Array[Vector2i] = []
+	for part in parts:
+		if part.kind == PlantPart.Kind.STEM:
+			var rect := PlantRenderer.bar_rect(part)
+			for y in range(rect.position.y, rect.end.y):
+				for x in range(rect.position.x, rect.end.x):
+					pixels.append(Vector2i(x, y))
+	pixels.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y > b.y)
+	var held := {}
+	for pixel in pixels:
+		if held.has(pixel):
+			continue
+		var below := pixel + Vector2i.DOWN
+		if held.has(below) or _solid_at(Vector2(below) + Vector2(0.5, 0.5)):
+			held[pixel] = true
+	return held
+
+
+## Whether every column of a runner's corner curve still has ground under its foot.
+func _fillet_held(part: PlantPart) -> bool:
+	var rect := PlantRenderer.bar_rect(part)
+	var away := -part.run.x if part.direction == Vector2i.UP else part.run.x
+	var foot := roundi(part.start.y if part.direction == Vector2i.UP else part.end.y) + maxi(roundi(part.thickness), 1) / 2
+	for reach in range(1, PlantRenderer.FILLET + 1):
+		var x := rect.position.x - reach if away < 0 else rect.end.x + reach - 1
+		if not _solid_at(Vector2(x + 0.5, foot + 1.5)):
+			return false
+	return true
+
+
+## The first pixel along a runner (1 to its length; 0 is where it joins its parent) that
+## is held up, or with `want_held` false the first that isn't. -1 if there's none.
+func _first_index(part: PlantPart, held: Dictionary, want_held: bool) -> int:
+	for i in range(1, roundi(part.length) + 1):
+		if _row_held(part, i, held) == want_held:
+			return i
+	return -1
+
+
+## Whether every pixel across a runner at a step along it is held up.
+func _row_held(part: PlantPart, i: int, held: Dictionary) -> bool:
+	var rect := PlantRenderer.bar_rect(part)
+	var at := Vector2i(part.start.round()) + part.direction * i
+	if part.direction.y == 0:
+		for y in range(rect.position.y, rect.end.y):
+			if not held.has(Vector2i(at.x, y)):
+				return false
+	else:
+		for x in range(rect.position.x, rect.end.x):
+			if not held.has(Vector2i(x, at.y)):
+				return false
+	return true
+
+
+## Splits a runner at its first loose pixel `cut`: the part before it stays, and the
+## rest (with everything hanging off it) is salvaged.
+func _break_runner(part: PlantPart, cut: int, held: Dictionary, falling: Array[PlantPart]) -> void:
+	var length := roundi(part.length)
+	var pieces := _take_children(part, cut, length)
+	if cut > 1: # Shorten it to the pixels before the cut; its blades stay where they are.
+		var kept := float(cut - 1)
+		for child in part.children:
+			child.offset += Vector2(part.direction) * (part.length - kept)
+		part.length = kept
+		part.target_length = kept
+		part.base_length = kept
+	else: # Nothing of it is held: it goes, and blades at its very foot fall.
+		for gone in _remove_subtree(part):
+			if gone.kind == PlantPart.Kind.LEAF:
+				falling.append(gone)
+	_salvage(part.start, part.direction, part.run, cut, length, pieces, held, falling)
+
+
+## Takes everything off a runner that hangs from pixel `from` on (runners at its end,
+## blades with their foot there), as pieces: {index, parts (parents first)}.
+func _take_children(runner: PlantPart, from: int, length: int) -> Array:
+	var pieces := []
+	for child in runner.children.duplicate():
+		var index := length if child.kind == PlantPart.Kind.STEM else _blade_index(runner, child)
+		if index >= from:
+			var removed := _remove_subtree(child) if parts.has(child) else _subtree_of(child)
+			runner.children.erase(child)
+			pieces.append({index = index, parts = removed})
+	return pieces
+
+
+## A part and everything beyond it, parents first, following children.
+func _subtree_of(top: PlantPart) -> Array[PlantPart]:
+	var found: Array[PlantPart] = [top]
+	var i := 0
+	while i < found.size():
+		found.append_array(found[i].children)
+		i += 1
+	return found
+
+
+## What's beyond a break, pixels `from` to `length` of a runner that started at `start`
+## (in this plant's space), with `pieces` that hung off it. Loose pixels fall, and from
+## the first held pixel on it all becomes a new plant. If none of it is held, the
+## runners off its end are salvaged in turn.
+func _salvage(start: Vector2, direction: Vector2i, run: Vector2i, from: int, length: int, pieces: Array,
+		held: Dictionary, falling: Array[PlantPart]) -> void:
+	var probe := _segment(start, direction, run, length)
+	var first_held := -1
+	for i in range(from, length + 1):
+		if _row_held(probe, i, held):
+			first_held = i
+			break
+	var loose_end := first_held - 1 if first_held >= 0 else length
+	if loose_end >= from:
+		falling.append(_segment(start + Vector2(direction) * from, direction, run, loose_end - from))
+	var kept: Array[PlantPart] = []
+	for piece: Dictionary in pieces:
+		var piece_parts: Array[PlantPart] = []
+		piece_parts.assign(piece.parts)
+		var top := piece_parts[0]
+		if first_held >= 0 and piece.index >= first_held:
+			top.parent = null
+			kept.append_array(piece_parts)
+		elif top.kind == PlantPart.Kind.LEAF:
+			falling.append_array(piece_parts)
+		else: # A runner off a loose end: it has its own chance to be held.
+			var sub := _take_children(top, 1, roundi(top.length))
+			_salvage(top.start, top.direction, top.run, 1, roundi(top.length), sub, held, falling)
+	if first_held >= 0:
+		flora.split_off(self, start + Vector2(direction) * first_held, direction, run, length - first_held, kept)
+
+
+## A runner of `length` pixels from `start`, laid out on its own.
+func _segment(start: Vector2, direction: Vector2i, run: Vector2i, length: int) -> PlantPart:
+	var part := PlantPart.new(PlantPart.Kind.STEM, null)
+	part.direction = direction
+	part.run = run
+	part.length = length
+	part.target_length = length
+	part.base_length = length
+	part.thickness = species.min_thickness
+	part.start = start
+	part.layout()
+	return part
+
+
+## How far along its runner a blade's foot is, in pixels (the runner's length for blades
+## at its end).
+func _blade_index(runner: PlantPart, blade: PlantPart) -> int:
+	if runner.direction.y != 0:
+		return roundi(runner.length)
+	return roundi(runner.length + blade.offset.dot(Vector2(runner.direction)))
+
+
+## Sets up a plant from runners and blades split off another plant. `root` is laid out
+## from this plant's origin, and `rest` (parents first) hangs off it.
+func adopt(p_species: PlantSpecies, p_flora: Flora, p_anchor_cell: Vector2i, seed_value: int,
+		root: PlantPart, rest: Array[PlantPart], p_reserves: Vector2) -> void:
+	species = p_species
+	flora = p_flora
+	anchor_cell = p_anchor_cell
+	_rng.seed = seed_value
+	_vigor = _rng.randf_range(0.6, 1.4)
+	_max_parts = roundi(species.max_parts * _rng.randf_range(0.55, 1.15))
+	reserves = p_reserves
+	_wood.z_index = Z_GRASS
+	_leaves[1].z_index = Z_GRASS
+	_attach(root)
+	for part in rest:
+		if part.parent == null:
+			part.parent = root
+			root.children.append(part)
+		parts.append(part)
+	_add_segment(PlantPart.Kind.ROOT, root, Vector2i.DOWN, species.segment_length * 0.6, 0)
+	_rebuild()
+
+#endregion
+
+
 #region Resources
 
 ## Works out what each part makes and needs this step.
@@ -366,6 +597,7 @@ func _measure(dt: float) -> void:
 	_demand = Vector2.ZERO
 	_light_round = (_light_round + 1) % LIGHT_ROUNDS
 	var leaf_index := 0
+	var watering := lerpf(DRY_LEAVES, 1.0, _watered())
 	for part in parts:
 		match part.kind:
 			PlantPart.Kind.LEAF:
@@ -374,7 +606,7 @@ func _measure(dt: float) -> void:
 				leaf_index += 1
 				# Leaves make and cost in proportion to their area.
 				var area := pow(PlantRenderer.leaf_size(species, part) / species.leaf_area_size, 2.0)
-				part.production = Vector2(part.light * species.photosynthesis * area, 0.0) * dt
+				part.production = Vector2(part.light * species.photosynthesis * area * watering, 0.0) * dt
 				part.need = species.leaf_upkeep * area * dt
 			PlantPart.Kind.STEM:
 				part.production = Vector2.ZERO

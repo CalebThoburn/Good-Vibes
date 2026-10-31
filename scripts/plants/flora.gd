@@ -164,6 +164,30 @@ func spawn_plant(kind: PlantSpecies, cell: Vector2i) -> Plant:
 	return plant
 
 
+## Makes a new plant out of grass that broke off `from` but is still held up: a runner
+## of `length` pixels from `root_start` (in `from`'s space), with `rest` (parents first;
+## the ones with no parent hang off that runner).
+func split_off(from: Plant, root_start: Vector2, direction: Vector2i, run: Vector2i, length: int,
+		rest: Array[PlantPart]) -> void:
+	var root := PlantPart.new(PlantPart.Kind.STEM, null)
+	root.direction = direction
+	root.run = run
+	root.length = length
+	root.target_length = length
+	root.base_length = length
+	root.thickness = from.species.min_thickness
+	# It stands on whatever is under its lowest pixel.
+	var lowest := root_start + Vector2(direction) * length if direction == Vector2i.DOWN else root_start
+	var anchor := world.terrain.global_to_cell(from.to_global(lowest + Vector2(0.0, Plant.RUNNER_HEIGHT + 1.5)))
+	var plant := Plant.new()
+	plant.position = to_local(from.to_global(root_start))
+	add_child(plant)
+	var share := from.reserves * 0.3
+	from.reserves -= share
+	plant.adopt(from.species, self, anchor, _rng.randi(), root, rest, share)
+	plants.append(plant)
+
+
 func to_data() -> Array:
 	return plants.map(func(plant: Plant) -> Dictionary: return plant.to_data())
 

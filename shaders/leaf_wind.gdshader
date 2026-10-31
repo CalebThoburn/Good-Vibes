@@ -1,4 +1,5 @@
-// Leaves in the wind: ripples roll sideways through the canopy, so part of a leaf mass
+// Leaves in the wind (stronger and quicker the windier the weather): ripples roll
+// sideways through the canopy, so part of a leaf mass
 // stretches while another bunches up. Each pixel moves only as far as its "give" allows
 // (kept in the leaf texture's normal map): none where its leaf joins the branch, more
 // further out, so leaves never come away from the wood. Lit by the sun and moon like
@@ -13,6 +14,8 @@ uniform float speed = 1.7;
 // Ripple tightness (radians per world pixel: about a 48 px wavelength) and slight slant.
 uniform float ripple = 0.13;
 uniform float slant = 0.02;
+// How windy the weather is (1 a breezy day; more in rain). Set by Weather.
+global uniform float wind_strength;
 
 varying vec2 world;
 varying vec4 tint; // The item's color, e.g. the darker tint on a tree's back layer.
@@ -24,8 +27,9 @@ void vertex() {
 
 void fragment() {
 	float give = texture(NORMAL_TEXTURE, UV).r;
-	float gust = 0.55 + 0.45 * sin(TIME * 0.37 - world.x * 0.013);
-	float shift = sin(TIME * speed - world.x * ripple - world.y * slant) * sway * gust * give;
+	float gust = 0.55 + 0.45 * sin(TIME * 0.37 * wind_strength - world.x * 0.013);
+	float shift = sin(TIME * speed * (0.6 + 0.4 * wind_strength) - world.x * ripple - world.y * slant)
+			* sway * gust * give * wind_strength;
 	COLOR = texture(TEXTURE, UV - vec2(shift * TEXTURE_PIXEL_SIZE.x, 0.0)) * tint;
 	COLOR.rgb *= sun_light(world, SCREEN_PIXEL_SIZE);
 }
